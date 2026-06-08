@@ -8,12 +8,11 @@ import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from '@shared/t
 const platformWindowOptions = (): BrowserWindowConstructorOptions => {
   if (process.platform === 'darwin') {
     return {
-      transparent: true,
-      backgroundColor: '#00000000',
+      frame: false,
       vibrancy: 'under-window',
       titleBarStyle: 'hidden',
       visualEffectState: 'active',
-      trafficLightPosition: { x: 10, y: 10 }
+      trafficLightPosition: { x: 15, y: 10 }
     }
   }
 
