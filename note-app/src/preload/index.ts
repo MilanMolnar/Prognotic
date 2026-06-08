@@ -1,5 +1,3 @@
-
-import { deleteNote } from '@/lib'
 import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 

@@ -1,6 +1,5 @@
 import { NoteContent, NoteInfo } from "@shared/models";
 import { atom } from "jotai";
-import { notesMock } from "./mocks";
 import { unwrap } from "jotai/utils";
 
 const loadNotes = async () => {
@@ -29,10 +28,9 @@ const selectedNoteAtomAsync = atom(async (get) => {
     const selectedNote = notes[selectedNoteIndex];
 
     const noteContent = await window.context.readNote(selectedNote.title)
-    return {
-        ...selectedNote,
-        content: noteContent
-    }
+    const normalizedContent: string =
+        typeof noteContent === 'string' ? noteContent : noteContent.content
+    return { ...selectedNote, content: normalizedContent }
 });
 
 export const selectedNoteAtom = unwrap(selectedNoteAtomAsync, (prev) => prev ?? {

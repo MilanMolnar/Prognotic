@@ -12,12 +12,14 @@ export const useMarkdownEditor = () => {
     const saveNote = useSetAtom(saveNoteAtom)
     const editorRef = useRef<MDXEditorMethods>(null)
 
-    const handleAutoSaving = throttle( async (content: NoteContent) =>{
+    const handleAutoSaving = throttle( async (content: string | NoteContent) =>{
         if (!selectedNote) return
 
         console.log('auto saving....', selectedNote.title)
 
-        await saveNote(content)
+        const payload: NoteContent = typeof content === 'string' ? { content } : content
+
+        await saveNote(payload)
         }, autoSavingTime, {
         leading: false,
         trailing: true
@@ -30,8 +32,9 @@ export const useMarkdownEditor = () => {
 
         const content = editorRef.current?.getMarkdown()
 
+
         if (content != null){
-            await saveNote(content)
+            await saveNote({content : content})
         }
     }
 

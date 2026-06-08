@@ -1,5 +1,5 @@
 import { appDirectory, fileEncoding, onboardingNoteName } from "@shared/constants"
-import { NoteInfo } from "@shared/models"
+import { NoteContent, NoteInfo } from "@shared/models"
 import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from "@shared/types"
 import { dialog } from "electron"
 import { ensureDir, readdir, readFile, remove, stat, writeFile } from "fs-extra"
@@ -56,15 +56,23 @@ export const getNoteInfoFromFileName = async (fileName: string): Promise<NoteInf
 
 export const readNote: ReadNote = async (filename) => {
     const rootDir = getRootDir()
-    
-    return readFile(`${rootDir}${separator()}${filename}.md`, {encoding:fileEncoding})
+
+
+    const content = await readFile(`${rootDir}${separator()}${filename}.md`, {encoding:fileEncoding}) 
+
+    const noteContent: NoteContent = typeof content === 'string' ? { content } : content
+    return noteContent
 }
 
 export const writeNote: WriteNote = async (filename, content) =>{
     const rootDir = getRootDir()
     
     console.info(`Writing note ${filename}`)
-    return writeFile(`${rootDir}${separator()}${filename}.md`, content, {encoding: fileEncoding})
+    return writeFile(
+        `${rootDir}${separator()}${filename}.md`,
+        content.content,
+        { encoding: fileEncoding }
+      )
 }
 
 export const createNote:CreateNote= async () =>{
