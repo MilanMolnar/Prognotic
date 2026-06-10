@@ -7,13 +7,16 @@ import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from '@shared/t
 
 const platformWindowOptions = (): BrowserWindowConstructorOptions => {
   if (process.platform === 'darwin') {
+    // NOTE (macOS vibrancy): do NOT set `backgroundColor` here. Setting any
+    // backgroundColor (even fully transparent like '#00000000') makes Electron
+    // treat the window as non-transparent and disables the vibrancy material,
+    // rendering a solid window. See electron/electron#32007 and #31461.
     return {
       frame: false,
       transparent: true,
-      backgroundColor: '#00000000',
       vibrancy: 'under-window',
-      titleBarStyle: 'hidden',
       visualEffectState: 'active',
+      titleBarStyle: 'hidden',
       trafficLightPosition: { x: 15, y: 10 }
     }
   }
@@ -51,10 +54,6 @@ function createWindow(): void {
       contextIsolation: true
     }
   })
-
-  if (process.platform === 'darwin') {
-    mainWindow.setBackgroundColor('#00000000')
-  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
