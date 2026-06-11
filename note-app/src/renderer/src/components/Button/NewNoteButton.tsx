@@ -1,12 +1,12 @@
 import {ActionButton, ActionButtonProps} from "@/components";
-import { createEmptyNoteAtom } from "@renderer/store";
-import { useSetAtom } from "jotai";
+import { useNoteActions } from "@renderer/context";
+import { JSX } from "react";
 import {LuPlus} from "react-icons/lu"
 
-export const NewNoteButton = ({...props}: ActionButtonProps) => {
-    const createEmptyNote = useSetAtom(createEmptyNoteAtom);
+export const NewNoteButton = ({...props}: ActionButtonProps): JSX.Element => {
+    const { createEmptyNote } = useNoteActions();
 
-    const handleCreation = async () => {
+    const handleCreation = async (): Promise<void> => {
         await createEmptyNote();
     }
 

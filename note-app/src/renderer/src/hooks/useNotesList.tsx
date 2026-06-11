@@ -1,14 +1,19 @@
 
-import { notesAtom, selectedNoteIndexAtom } from "@renderer/store";
-import { useAtomValue, useAtom } from "jotai";
+import { useNoteActions, useNotes } from "@renderer/context";
+import { NoteInfo } from "@shared/models";
 
-export const useNotesList = ( {onSelect}: {onSelect?: () => void} ) => {
-    const notes = useAtomValue(notesAtom);
+type UseNotesListResult = {
+    notes: NoteInfo[] | undefined
+    selectedNoteIndex: number | null
+    handleNoteSelect: (index: number) => () => Promise<void>
+}
 
-    const [selectedNoteIndex, setSelectedNoteIndex] = useAtom(selectedNoteIndexAtom);
+export const useNotesList = ( {onSelect}: {onSelect?: () => void} ): UseNotesListResult => {
+    const { notes, selectedNoteIndex } = useNotes();
+    const { selectNote } = useNoteActions();
 
     const handleNoteSelect = (index: number) => async() => {
-        setSelectedNoteIndex(index);
+        selectNote(index);
         if (onSelect) {
             onSelect();
         }

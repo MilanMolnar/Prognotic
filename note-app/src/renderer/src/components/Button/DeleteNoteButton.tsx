@@ -1,13 +1,12 @@
-import React from "react";
 import {ActionButton, ActionButtonProps} from "@/components";
 import {FaRegTrashAlt} from "react-icons/fa"
-import { deleteNoteAtom } from "@renderer/store";
-import { useSetAtom } from "jotai";
+import { useNoteActions } from "@renderer/context";
+import { JSX } from "react";
 
-export const DeleteNoteButton = ({...props}: ActionButtonProps) => {
-    const deleteNote = useSetAtom(deleteNoteAtom);
+export const DeleteNoteButton = ({...props}: ActionButtonProps): JSX.Element => {
+    const { deleteNote } = useNoteActions();
 
-    const handleDeletion = async () => {
+    const handleDeletion = async (): Promise<void> => {
        await deleteNote();
     }
 

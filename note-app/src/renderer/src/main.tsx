@@ -2,10 +2,13 @@ import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { NotesProvider } from './context'
 import App from './App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <NotesProvider>
+      <App />
+    </NotesProvider>
   </StrictMode>
 )

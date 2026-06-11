@@ -1,15 +1,20 @@
 import { MDXEditorMethods } from "@mdxeditor/editor";
-import { saveNoteAtom, selectedNoteAtom } from "@renderer/store";
+import { SelectedNote, useNoteActions, useNotes } from "@renderer/context";
 import { NoteContent } from "@shared/models";
-import { useAtomValue, useSetAtom } from "jotai";
-import { useRef } from "react";
-import { throttle } from "lodash"
+import { RefObject, useRef } from "react";
+import { throttle, DebouncedFuncLeading } from "lodash"
 import { autoSavingTime } from "@shared/constants";
 
+type UseMarkdownEditorResult = {
+    selectedNote: SelectedNote | null
+    editorRef: RefObject<MDXEditorMethods | null>
+    handleAutoSaving: DebouncedFuncLeading<(content: string | NoteContent) => Promise<void>>
+    handleBlur: () => Promise<void>
+}
 
-export const useMarkdownEditor = () => {
-    const selectedNote = useAtomValue(selectedNoteAtom);
-    const saveNote = useSetAtom(saveNoteAtom)
+export const useMarkdownEditor = (): UseMarkdownEditorResult => {
+    const { selectedNote } = useNotes();
+    const { saveNote } = useNoteActions()
     const editorRef = useRef<MDXEditorMethods>(null)
 
     const handleAutoSaving = throttle( async (content: string | NoteContent) =>{
@@ -25,7 +30,7 @@ export const useMarkdownEditor = () => {
         trailing: true
     } )
 
-    const handleBlur = async () => {
+    const handleBlur = async (): Promise<void> => {
         if(!selectedNote) return
 
         handleAutoSaving.cancel()
