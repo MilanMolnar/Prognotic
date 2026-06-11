@@ -5,7 +5,11 @@ out
 .eslintcache
 *.log*
 *TODO*
-.claude
+
+# Coding agents (Cursor, Claude Code, etc.) — local only, do not commit
+.claude/
+.cursor/
 AGENTS.md
 CLAUDE.md
 DEVELOPER.md
+.cursorrules
