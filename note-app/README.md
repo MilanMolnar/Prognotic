@@ -8,8 +8,9 @@ A desktop note-taking application built with **Electron**, **React**, and **Type
 - **Rich Markdown editing** — headings, lists, blockquotes, links, images, and code blocks via [MDXEditor](https://mdxeditor.dev/)
 - **Auto-save** — changes are saved automatically while you edit, and again when you click away from the editor
 - **Sorted note list** — notes appear in the sidebar ordered by most recently edited
+- **Welcome note** — if the `NoteMark` folder is empty on first launch, a sample `Welcome.md` note is created automatically
 - **Native dialogs** — create and delete notes through the operating system's file and confirmation dialogs
-- **Frameless window** — a minimal, custom-styled window with a draggable top bar
+- **Frameless window** — a minimal, custom-styled window with a draggable top bar (acrylic on Windows, vibrancy on macOS)
 
 ## Where notes are stored
 
@@ -80,12 +81,12 @@ The `.md` file is permanently removed from the `NoteMark` folder. If other notes
 
 ## How it works (architecture)
 
-The app follows the standard Electron three-process model:
+The app follows the standard Electron three-process model. The renderer is sandboxed; all filesystem access goes through a typed preload bridge.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Renderer (React)                                       │
-│  UI, Jotai state, MDXEditor                             │
+│  Renderer (React 19)                                    │
+│  UI, React Context state, MDXEditor                     │
 │         │                                               │
 │         │  window.context.*  (contextBridge)            │
 ├─────────┼───────────────────────────────────────────────┤
@@ -102,6 +103,15 @@ The app follows the standard Electron three-process model:
                    ~/NoteMark/*.md
 ```
 
+### Project layout
+
+| Layer | Location | Role |
+|-------|----------|------|
+| Main | `src/main/` | Electron entry, window creation, IPC handlers |
+| Preload | `src/preload/` | `contextBridge` — exposes `window.context` |
+| Renderer | `src/renderer/src/` | React UI, context providers, hooks, components |
+| Shared | `src/shared/` | Types, models, constants (safe in all processes) |
+
 ### IPC API
 
 The preload script exposes a `window.context` object to the renderer:
@@ -116,12 +126,30 @@ The preload script exposes a `window.context` object to the renderer:
 
 ### State management
 
-The renderer uses [Jotai](https://jotai.org/) atoms to manage:
+Global note state uses the **React Context API**, provided by `NotesProvider` at the app root (`main.tsx`).
 
-- The list of notes (`notesAtom`) — loaded on startup, sorted by `lastEditTime` descending
-- The currently selected note index (`selectedNoteIndexAtom`)
-- The selected note's full content (`selectedNoteAtom`) — loaded asynchronously when selection changes
-- Actions for create, delete, and save (`createEmptyNoteAtom`, `deleteNoteAtom`, `saveNoteAtom`)
+| Hook | Provides |
+|------|----------|
+| `useNotes()` | Note list, selected index, and the currently loaded note (with content) |
+| `useNoteActions()` | `selectNote`, `createEmptyNote`, `deleteNote`, `saveNote` |
+
+State and actions are split into separate contexts (`NotesStateContext` / `NotesActionsContext`) so action-only consumers such as toolbar buttons do not re-render when the note list or selection changes.
+
+`NotesProvider` loads the note list on startup, fetches note content when the selection changes, and updates local state only after IPC calls succeed.
+
+### UI component tree
+
+```
+App.tsx
+├── DraggableTopBar
+└── RootLayout
+    ├── Sidebar
+    │   ├── ActionButtonsRow → NewNoteButton, DeleteNoteButton
+    │   └── NotePreviewList → useNotesList
+    └── Content
+        ├── FloatingNoteTitle
+        └── MarkdownEditor → useMarkdownEditor (auto-save, blur save)
+```
 
 ### Key source files
 
@@ -130,8 +158,10 @@ The renderer uses [Jotai](https://jotai.org/) atoms to manage:
 | `src/main/index.ts` | Electron entry point, window creation, IPC handlers |
 | `src/main/lib/index.ts` | File-system operations and native dialogs |
 | `src/preload/index.ts` | Secure bridge between main and renderer |
-| `src/renderer/src/store/index.ts` | Jotai atoms and note CRUD logic |
+| `src/renderer/src/context/NotesProvider.tsx` | Note list, selection, and CRUD actions |
+| `src/renderer/src/context/NotesContext.ts` | Context types and `useNotes` / `useNoteActions` hooks |
 | `src/renderer/src/hooks/useMarkdownEditor.tsx` | Auto-save and editor lifecycle |
+| `src/renderer/src/hooks/useNotesList.tsx` | Sidebar selection handling |
 | `src/renderer/src/components/MarkdownEditor.tsx` | MDXEditor wrapper |
 | `src/shared/constants.ts` | App directory name (`NoteMark`), encoding, auto-save interval |
 
@@ -170,15 +200,15 @@ This starts the Electron app with hot module replacement for the renderer.
 
 ### Recommended IDE setup
 
-- [VS Code](https://code.visualstudio.com/) with the [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) extension
+- [VS Code](https://code.visualstudio.com/) or [Cursor](https://cursor.com/) with the [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) extension
 
 ## Tech stack
 
 - **Electron** — cross-platform desktop shell
 - **React 19** — UI
+- **React Context API** — global note state (`NotesProvider`)
 - **TypeScript** — type safety across main, preload, and renderer
 - **electron-vite** — build tooling and dev server
-- **Jotai** — lightweight state management
 - **MDXEditor** — WYSIWYG Markdown editor
-- **Tailwind CSS** — styling
+- **Tailwind CSS v4** — styling
 - **fs-extra** — file-system helpers in the main process

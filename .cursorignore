@@ -1,0 +1,7 @@
+﻿# Local-only coding agent files (also listed in .gitignore)
+.claude/
+.cursor/
+AGENTS.md
+CLAUDE.md
+DEVELOPER.md
+.cursorrules
