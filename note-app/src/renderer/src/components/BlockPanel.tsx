@@ -7,7 +7,7 @@ import { LuX } from 'react-icons/lu'
 export type BlockPanelProps = ComponentProps<'div'>
 
 // The middle of the right panel: the chronological feed, or — when a block
-// is selected — the full markdown editor in its place. The block's timestamp
+// is selected — the full markdown editor in its place. The block's short name
 // is shown by FeedHeader while editing.
 export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Element => {
   const { selectedBlockId, selectedBlock, contentVersion } = useBlocks()
@@ -64,7 +64,7 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
       <button
         onClick={() => selectBlock(null)}
         title="Back to feed"
-        className="absolute right-2 top-1 z-10 rounded-md p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-600/50 transition-colors duration-100"
+        className="absolute right-2 top-1 z-10 rounded-md p-1.5 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10 transition-colors duration-100"
       >
         <LuX className="w-6 h-6" />
       </button>

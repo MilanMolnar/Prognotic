@@ -1,11 +1,11 @@
 import { useBlocks, useGoals, useSearch, useSearchActions } from '@renderer/context'
-import { cn, formatDateFromMs } from '@renderer/utils'
+import { blockLabel, cn } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { ComponentProps, JSX, KeyboardEvent } from 'react'
 import { LuSearch } from 'react-icons/lu'
 
 // Shows the current scope — category name in feed view, the open block's
-// timestamp in edit view. The whole title row is one search toggle: hovering
+// short name in edit view. The whole title row is one search toggle: hovering
 // animates a faint underline in left-to-right; clicking opens the search
 // input (full underline, full-strength icon). Escape or a second click closes.
 export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.Element => {
@@ -23,7 +23,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
         : (goals?.find((goal) => goal.id === selectedCategory)?.name ?? 'Goal')
   const label = isEditView
     ? selectedBlock
-      ? formatDateFromMs(selectedBlock.createdAt)
+      ? blockLabel(selectedBlock.excerpt)
       : '...'
     : categoryLabel
 
@@ -63,7 +63,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleInputKeyDown}
-          placeholder={isEditView ? 'Find in this block...' : `Search ${categoryLabel}...`}
+          placeholder={`Quick search in ${label}`}
           className="no-drag absolute left-1/2 top-full z-30 mt-1 w-72 max-w-[min(18rem,calc(100vw-6rem))] -translate-x-1/2 animate-[search-roll_150ms_ease-out] rounded-md border border-zinc-400/50 bg-zinc-900/95 px-2 py-1 text-sm outline-none caret-yellow-500 placeholder:text-zinc-500 focus:border-zinc-300/50"
         />
       )}
