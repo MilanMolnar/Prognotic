@@ -2,8 +2,8 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, BrowserWindowConstructorOptions, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
-import { createNote, deleteNote, getNotes, readNote, writeNote } from './lib'
-import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from '@shared/types'
+import { appendToBlock, createBlock, createGoal, deleteBlock, getBlocks, getGoals, getSettings, readBlock, setSettings, writeBlock } from './lib'
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from '@shared/types'
 
 const platformWindowOptions = (): BrowserWindowConstructorOptions => {
   if (process.platform === 'darwin') {
@@ -86,11 +86,16 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
-  ipcMain.handle('getNotes', (_, ...args: Parameters<GetNotes>) => getNotes(...args))
-  ipcMain.handle('readNote', (_, ...args: Parameters<ReadNote>) => readNote(...args))
-  ipcMain.handle('writeNote', (_, ...args: Parameters<WriteNote>) => writeNote(...args))
-  ipcMain.handle('createNote', (_, ...args: Parameters<CreateNote>) => createNote(...args))
-  ipcMain.handle('deleteNote', (_, ...args: Parameters<DeleteNote>) => deleteNote(...args))
+  ipcMain.handle('getBlocks', (_, ...args: Parameters<GetBlocks>) => getBlocks(...args))
+  ipcMain.handle('readBlock', (_, ...args: Parameters<ReadBlock>) => readBlock(...args))
+  ipcMain.handle('writeBlock', (_, ...args: Parameters<WriteBlock>) => writeBlock(...args))
+  ipcMain.handle('createBlock', (_, ...args: Parameters<CreateBlock>) => createBlock(...args))
+  ipcMain.handle('appendToBlock', (_, ...args: Parameters<AppendToBlock>) => appendToBlock(...args))
+  ipcMain.handle('deleteBlock', (_, ...args: Parameters<DeleteBlock>) => deleteBlock(...args))
+  ipcMain.handle('getSettings', (_, ...args: Parameters<GetSettings>) => getSettings(...args))
+  ipcMain.handle('setSettings', (_, ...args: Parameters<SetSettings>) => setSettings(...args))
+  ipcMain.handle('getGoals', (_, ...args: Parameters<GetGoals>) => getGoals(...args))
+  ipcMain.handle('createGoal', (_, ...args: Parameters<CreateGoal>) => createGoal(...args))
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

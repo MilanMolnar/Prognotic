@@ -1,19 +1,25 @@
-# NoteMark
+# Prognotic
 
-A desktop note-taking application built with **Electron**, **React**, and **TypeScript**. Notes are stored as plain Markdown files on your computer — no cloud account, no database. Open the app, pick a note from the sidebar, and edit with a rich Markdown editor that auto-saves as you type.
+A desktop note-taking and knowledge-capture app built with **Electron**, **React 19**, and **TypeScript**. Notes are stored locally as Markdown — no cloud account, no database. Capture quick thoughts into time-windowed **blocks**, organize them under **goals**, and edit with a rich Markdown editor that auto-saves.
+
+> Storage lives in a folder called **`NoteMark`** in your home directory. The in-app brand name is **Prognotic**.
 
 ## Features
 
-- **Local Markdown files** — every note is a `.md` file in a dedicated folder on your machine
+- **Goal-based organization** — pinned system categories (**Quick Notes**, **Research**) plus user-defined goals with name and description
+- **Time-windowed blocks** — quick capture appends to the open block within a configurable window (default 5 minutes), then starts a new block
+- **Block feed** — chronological cards with short label, timestamp, and dim borders; click to edit in-place with live Markdown shortcuts
+- **Chat-style capture bar** — bottom input with Markdown toolbar (heading, bold, italic, list, code); shows which block you are appending to or **new** when the window has expired
+- **Context-aware search** — fuzzy search across blocks in the selected goal from the top bar; in-block find/highlight when editing
+- **Collapsible side panels** — goals sidebar (open by default) and AI assistant panel (closed by default, UI shell only)
+- **Resizable assistant panel** — drag the divider between main content and chat to adjust width
 - **Rich Markdown editing** — headings, lists, blockquotes, links, images, and code blocks via [MDXEditor](https://mdxeditor.dev/)
-- **Auto-save** — changes are saved automatically while you edit, and again when you click away from the editor
-- **Sorted note list** — notes appear in the sidebar ordered by most recently edited
-- **Native dialogs** — create and delete notes through the operating system's file and confirmation dialogs
-- **Frameless window** — a minimal, custom-styled window with a draggable top bar
+- **Auto-save** — throttled save while typing and immediate save on blur
+- **Frameless window** — custom top bar with draggable region (acrylic on Windows, vibrancy on macOS)
 
-## Where notes are stored
+## Where data is stored
 
-All notes live in a folder called **`NoteMark`** inside your home directory:
+All data lives in **`NoteMark`** inside your home directory:
 
 | Platform | Path |
 |----------|------|
@@ -21,140 +27,126 @@ All notes live in a folder called **`NoteMark`** inside your home directory:
 | macOS    | `/Users/<you>/NoteMark/` |
 | Linux    | `/home/<you>/NoteMark/` |
 
-Each note is a single file named `<title>.md`. For example, a note titled `Meeting notes` is saved as `Meeting notes.md`.
+| File | Purpose |
+|------|---------|
+| `{uuid}.md` | Markdown content for each note block |
+| `index.json` | Block metadata registry (timestamps, category, excerpt) |
+| `goals.json` | User-defined goals |
+| `settings.json` | App settings (e.g. block window duration) |
 
-The folder is created automatically the first time the app needs it. You can also add or edit `.md` files in that folder directly — the app will pick them up the next time it loads the note list.
+The folder is created automatically on first launch. Legacy `.md` files dropped into the folder are imported into the block index on next load. An empty folder seeds a welcome block.
 
 ## Using the app
 
 ### Layout
 
-The window is split into two areas:
+```
+DraggableTopBar — Prognotic (left) | goal/timestamp + search (center) | window controls (right)
+├── Left sidebar (collapsible) — goals, search, settings, collapse toggle
+├── Main workspace
+│   ├── Block feed (or full editor when a block is open)
+│   └── Capture bar (chat-style input at the bottom)
+└── Right panel (collapsible, resizable) — AI assistant shell (placeholder UI)
+```
 
-- **Sidebar (left)** — action buttons at the top, scrollable list of notes below
-- **Editor (right)** — the current note's title at the top, Markdown editor below
+- **Left sidebar** — select a goal or system category; a sliding yellow border marks the active item. **+** opens a dialog to create a goal (name + description). Settings (cog) and panel toggle are at the bottom.
+- **Top bar (center)** — shows the selected category name, or the open block's timestamp while editing. Hover for an animated underline; click to open fuzzy search. Search scope is the current goal's blocks, or the open block's content when editing.
+- **Block feed** — blocks for the selected category, newest near the bottom (chat-style scroll). Open blocks show a yellow pulse on the card border.
+- **Block editing** — click a block to expand into the full MDXEditor (`# heading` renders live). The capture bar fades while editing. Close with **X** or switch category to return to the feed.
+- **Capture bar** — type and send (or Ctrl+Enter). Appends to the open block if still within the time window; otherwise creates a new block in the selected category. The border legend shows the target block name or **new**.
 
-When no note is selected, the editor shows a placeholder message. When there are no notes at all, the sidebar shows an empty-state message.
+### Goals and categories
 
-### Creating a note
+| Category | Meaning |
+|----------|---------|
+| **Quick Notes** | Default capture inbox (`category: null`) |
+| **Research** | Pinned system topic for topics to research later |
+| **Custom goals** | User-created; each has a description for future AI auto-sorting |
 
-1. Click the **+** button in the top-left of the sidebar.
-2. A native **Save** dialog opens with the default name `Untitled.md` in the `NoteMark` folder.
-3. Choose a filename and click **Create**.
+Switching goals exits block edit mode and clears search.
 
-The new note is created as an empty Markdown file, added to the top of the sidebar, and opened in the editor immediately.
+### Settings
 
-> **Important:** Notes must be saved inside the `NoteMark` folder. If you pick a different location in the dialog, creation is cancelled and an error message is shown.
+Open the cog in the left sidebar to adjust **block window minutes** — how long after your last write a block stays "open" for appends.
 
-### Selecting a note
+### AI assistant
 
-Click any note in the sidebar to open it in the editor. The selected note is highlighted. The editor scroll position resets to the top when you switch notes.
+The right panel is a **UI shell only**: message list, input, and placeholder replies. LLM integration and note querying are planned (see `HighlevelRoadmap.md`).
 
-Each entry in the sidebar shows the note title and the date/time it was last edited (formatted using your system locale).
+## Architecture
 
-### Editing a note
-
-With a note selected, type directly in the Markdown editor on the right. Supported formatting includes:
-
-- Headings
-- Bullet and numbered lists
-- Blockquotes
-- Links and images
-- Code blocks
-- Markdown keyboard shortcuts
-
-Changes are saved in two ways:
-
-1. **Auto-save** — after you stop typing, the note is written to disk within a few seconds (debounced).
-2. **On blur** — when you click outside the editor, any pending changes are saved immediately.
-
-You do not need to press a save button.
-
-### Deleting a note
-
-1. Select the note you want to remove.
-2. Click the **trash** icon next to the **+** button.
-3. Confirm in the warning dialog by clicking **Delete**.
-
-The `.md` file is permanently removed from the `NoteMark` folder. If other notes remain, the first note in the list is selected automatically.
-
-## How it works (architecture)
-
-The app follows the standard Electron three-process model:
+Electron three-process model with a sandboxed renderer; all filesystem access goes through a typed preload bridge.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Renderer (React)                                       │
-│  UI, Jotai state, MDXEditor                             │
-│         │                                               │
-│         │  window.context.*  (contextBridge)            │
+│  Renderer (React 19)                                    │
+│  Context providers, MDXEditor, Tailwind CSS               │
+│         │  window.context.*  (contextBridge)              │
 ├─────────┼───────────────────────────────────────────────┤
 │  Preload                                                │
-│  Exposes typed IPC wrappers to the renderer             │
-│         │                                               │
-│         │  ipcRenderer.invoke / ipcMain.handle          │
 ├─────────┼───────────────────────────────────────────────┤
-│  Main process (Node.js)                                 │
-│  File I/O, native dialogs (create / delete)             │
+│  Main process (Node.js) — file I/O, native dialogs      │
 └─────────────────────────────────────────────────────────┘
                           │
                           ▼
-                   ~/NoteMark/*.md
+                   ~/NoteMark/
 ```
 
-### IPC API
-
-The preload script exposes a `window.context` object to the renderer:
+### IPC API (`window.context`)
 
 | Method | Description |
 |--------|-------------|
-| `getNotes()` | Lists all `.md` files in `NoteMark`, returning title and last-modified time |
-| `readNote(title)` | Reads the Markdown content of a note |
-| `writeNote(title, content)` | Writes content back to the note file |
-| `createNote()` | Opens a save dialog and creates a new empty `.md` file |
-| `deleteNote(title)` | Shows a confirmation dialog and deletes the note file |
+| `getBlocks()` | List all blocks from `index.json`, synced with `.md` files on disk |
+| `readBlock(id)` | Read a block's Markdown content |
+| `writeBlock(id, content)` | Write content; updates excerpt and timestamp |
+| `createBlock(content, category)` | Create a new block in the given category |
+| `appendToBlock(id, text)` | Append text to an existing block |
+| `deleteBlock(id)` | Confirm and delete a block |
+| `getGoals()` | List user-defined goals |
+| `createGoal(name, description)` | Create a goal |
+| `getSettings()` / `setSettings(patch)` | Read/write app settings |
 
 ### State management
 
-The renderer uses [Jotai](https://jotai.org/) atoms to manage:
+React Context providers (see `note-app/src/renderer/src/main.tsx`):
 
-- The list of notes (`notesAtom`) — loaded on startup, sorted by `lastEditTime` descending
-- The currently selected note index (`selectedNoteIndexAtom`)
-- The selected note's full content (`selectedNoteAtom`) — loaded asynchronously when selection changes
-- Actions for create, delete, and save (`createEmptyNoteAtom`, `deleteNoteAtom`, `saveNoteAtom`)
+| Provider | Role |
+|----------|------|
+| `SettingsProvider` | Block window duration |
+| `GoalsProvider` | Goals list and selected category |
+| `BlocksProvider` | Blocks, open/selected block, quick capture |
+| `SearchProvider` | Feed header search state |
+| `PanelsProvider` | Sidebar/panel open state and chat panel width |
 
 ### Key source files
 
 | Path | Role |
 |------|------|
-| `src/main/index.ts` | Electron entry point, window creation, IPC handlers |
-| `src/main/lib/index.ts` | File-system operations and native dialogs |
-| `src/preload/index.ts` | Secure bridge between main and renderer |
-| `src/renderer/src/store/index.ts` | Jotai atoms and note CRUD logic |
-| `src/renderer/src/hooks/useMarkdownEditor.tsx` | Auto-save and editor lifecycle |
-| `src/renderer/src/components/MarkdownEditor.tsx` | MDXEditor wrapper |
-| `src/shared/constants.ts` | App directory name (`NoteMark`), encoding, auto-save interval |
+| `note-app/src/main/lib/index.ts` | Block/goal/settings persistence |
+| `note-app/src/renderer/src/context/BlocksProvider.tsx` | Block lifecycle and capture logic |
+| `note-app/src/renderer/src/components/CategorySidebar.tsx` | Goals sidebar |
+| `note-app/src/renderer/src/components/BlockFeed.tsx` / `BlockCard.tsx` | Block feed UI |
+| `note-app/src/renderer/src/components/CaptureBar.tsx` | Quick capture input |
+| `note-app/src/renderer/src/components/FeedHeader.tsx` | Top bar search |
+| `note-app/src/renderer/src/components/ChatPanel.tsx` | AI assistant shell |
+| `note-app/src/shared/models.ts` | `BlockMeta`, `Goal`, `AppSettings` |
 
 ## Development
+
+All commands run from the `note-app/` directory.
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (LTS recommended)
 - npm
 
-### Install dependencies
+### Install and run
 
 ```bash
+cd note-app
 npm install
-```
-
-### Run in development mode
-
-```bash
 npm run dev
 ```
-
-This starts the Electron app with hot module replacement for the renderer.
 
 ### Other scripts
 
@@ -164,21 +156,20 @@ This starts the Electron app with hot module replacement for the renderer.
 | `npm run build` | Type-check and build for production |
 | `npm run build:win` | Build a Windows installer |
 | `npm run build:mac` | Build a macOS `.dmg` |
-| `npm run build:linux` | Build Linux packages (AppImage, snap, deb) |
+| `npm run build:linux` | Build Linux packages |
 | `npm run lint` | Run ESLint |
-| `npm run typecheck` | Run TypeScript checks for main and renderer |
-
-### Recommended IDE setup
-
-- [VS Code](https://code.visualstudio.com/) with the [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) extension
+| `npm run typecheck` | TypeScript checks for main and renderer |
 
 ## Tech stack
 
-- **Electron** — cross-platform desktop shell
-- **React 19** — UI
-- **TypeScript** — type safety across main, preload, and renderer
-- **electron-vite** — build tooling and dev server
-- **Jotai** — lightweight state management
+- **Electron 39** — desktop shell
+- **React 19** + **TypeScript**
+- **React Context API** — app state
+- **electron-vite** — build tooling
 - **MDXEditor** — WYSIWYG Markdown editor
-- **Tailwind CSS** — styling
-- **fs-extra** — file-system helpers in the main process
+- **Tailwind CSS v4** — styling
+- **fs-extra** — filesystem helpers in the main process
+
+## Roadmap
+
+See [`HighlevelRoadmap.md`](HighlevelRoadmap.md) for planned features: AI auto-sorting from Quick Notes into goals, conversational retrieval, staging inbox for AI research, voice capture, and more.

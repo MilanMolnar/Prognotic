@@ -1,16 +1,21 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { ReadNote, GetNotes, WriteNote, CreateNote, DeleteNote } from '@shared/types'
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from '@shared/types'
 
 declare global {
   interface Window {
     electron: ElectronAPI
     context: {
       locale: string
-      getNotes: GetNotes
-      readNote: ReadNote
-      writeNote: WriteNote
-      createNote: CreateNote
-      deleteNote: DeleteNote
+      getBlocks: GetBlocks
+      readBlock: ReadBlock
+      writeBlock: WriteBlock
+      createBlock: CreateBlock
+      appendToBlock: AppendToBlock
+      deleteBlock: DeleteBlock
+      getSettings: GetSettings
+      setSettings: SetSettings
+      getGoals: GetGoals
+      createGoal: CreateGoal
     }
   }
 }

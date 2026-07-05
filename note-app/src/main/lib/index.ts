@@ -1,136 +1,327 @@
-import { appDirectory, fileEncoding, onboardingNoteName } from "@shared/constants"
-import { NoteContent, NoteInfo } from "@shared/models"
-import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from "@shared/types"
+import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, settingsFileName } from "@shared/constants"
+import { AppSettings, BlockMeta, Goal } from "@shared/models"
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from "@shared/types"
+import { randomUUID } from "crypto"
 import { dialog } from "electron"
-import { ensureDir, readdir, readFile, remove, stat, writeFile } from "fs-extra"
+import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "fs-extra"
 import { homedir } from "os"
-import path from "path"
-import {isEmpty} from 'lodash'
 import welcomeNoteFile from '../../../resources/welcome-note.md?asset'
 
 
-export const separator = (): string => { 
+export const separator = (): string => {
   if (process.platform === 'win32')
-    return "\\" 
+    return "\\"
   return "/"
 }
-export const getRootDir = () => {
+export const getRootDir = (): string => {
     return `${homedir()}${separator()}${appDirectory}`
 }
 
+const getIndexPath = (): string => `${getRootDir()}${separator()}${indexFileName}`
+const getSettingsPath = (): string => `${getRootDir()}${separator()}${settingsFileName}`
+const getGoalsPath = (): string => `${getRootDir()}${separator()}${goalsFileName}`
+const getBlockPath = (file: string): string => `${getRootDir()}${separator()}${file}`
 
-export const getNotes: GetNotes = async () => {
+type BlockIndex = {
+    version: number
+    blocks: Record<string, BlockMeta>
+}
+
+// Serializes every index read-modify-write so concurrent IPC calls
+// (editor autosave vs quick-input append) cannot interleave.
+let indexLock: Promise<unknown> = Promise.resolve()
+const withIndexLock = <T>(task: () => Promise<T>): Promise<T> => {
+    const run = indexLock.then(task, task)
+    indexLock = run.catch(() => undefined)
+    return run
+}
+
+// Write to a temp file and rename over the target so a crash mid-write
+// never leaves a truncated JSON file behind.
+const writeJsonAtomic = async (filePath: string, data: unknown): Promise<void> => {
+    const tmpPath = `${filePath}.tmp`
+    await writeFile(tmpPath, JSON.stringify(data, null, 2), { encoding: fileEncoding })
+    await rename(tmpPath, filePath)
+}
+
+// Missing or corrupt index degrades to empty; getBlocks rebuilds it
+// from the markdown files on disk.
+const loadIndex = async (): Promise<BlockIndex> => {
+    try {
+        const raw = await readFile(getIndexPath(), { encoding: fileEncoding })
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === 'object' && parsed.blocks && typeof parsed.blocks === 'object') {
+            return { version: 1, blocks: parsed.blocks }
+        }
+    } catch {
+        console.info('no readable block index, starting fresh')
+    }
+    return { version: 1, blocks: {} }
+}
+
+export const makeExcerpt = (content: string): string => {
+    const firstLine = content
+        .split('\n')
+        .map((line) =>
+            line
+                .replace(/^(\s*(#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+))+/, '')
+                .replace(/[*_`~]/g, '')
+                .trim()
+        )
+        .find((line) => line.length > 0)
+
+    if (!firstLine) return ''
+    return firstLine.length > excerptMaxLength ? `${firstLine.slice(0, excerptMaxLength - 1)}…` : firstLine
+}
+
+export const getBlocks: GetBlocks = async () => {
     const rootDir = getRootDir()
     await ensureDir(rootDir)
-    const notesFileNames = await readdir(rootDir, {
-        encoding: fileEncoding,
-        withFileTypes: false,
+
+    return withIndexLock(async () => {
+        const index = await loadIndex()
+        let changed = false
+
+        const fileNames = await readdir(rootDir)
+        const mdFiles = new Set(fileNames.filter((fileName) => fileName.endsWith('.md')))
+
+        // Drop index entries whose markdown file disappeared.
+        for (const [id, meta] of Object.entries(index.blocks)) {
+            if (!mdFiles.has(meta.file)) {
+                delete index.blocks[id]
+                changed = true
+            }
+        }
+
+        // Absorb markdown files the index does not know about (legacy notes,
+        // files dropped in by hand) as closed blocks; filenames are preserved.
+        const indexedFiles = new Set(Object.values(index.blocks).map((meta) => meta.file))
+        for (const file of mdFiles) {
+            if (indexedFiles.has(file)) continue
+
+            const fileStats = await stat(getBlockPath(file))
+            const content = await readFile(getBlockPath(file), { encoding: fileEncoding })
+            const id = randomUUID()
+
+            index.blocks[id] = {
+                id,
+                file,
+                // birthtime is unreliable on some filesystems, so never let
+                // createdAt land after updatedAt
+                createdAt: Math.min(fileStats.birthtimeMs || fileStats.mtimeMs, fileStats.mtimeMs),
+                updatedAt: fileStats.mtimeMs,
+                category: null,
+                excerpt: makeExcerpt(content) || file.replace('.md', ''),
+            }
+            changed = true
+        }
+
+        // First run with no notes at all: seed a welcome block, backdated so
+        // it never counts as the open block.
+        if (Object.keys(index.blocks).length === 0) {
+            console.info('no notes, seeding welcome block')
+            const content = await readFile(welcomeNoteFile, { encoding: fileEncoding })
+            const id = randomUUID()
+            const file = `${id}.md`
+            const backdated = Date.now() - 60 * 60 * 1000
+
+            await writeFile(getBlockPath(file), content, { encoding: fileEncoding })
+            index.blocks[id] = {
+                id,
+                file,
+                createdAt: backdated,
+                updatedAt: backdated,
+                category: null,
+                excerpt: makeExcerpt(content),
+            }
+            changed = true
+        }
+
+        if (changed) {
+            await writeJsonAtomic(getIndexPath(), index)
+        }
+
+        return Object.values(index.blocks)
     })
-    
-    const notes = notesFileNames.filter((fileName) => fileName.endsWith(".md"))
-
-    if (isEmpty(notes)){
-        console.info("no notes")
-
-        const content = await readFile(welcomeNoteFile, {encoding: fileEncoding})
-
-        console.info(content)
-
-        await writeFile(`${getRootDir()}${separator()}${onboardingNoteName}`, content, {encoding: fileEncoding})
-
-        notes.push(onboardingNoteName)
-    }
-
-    return Promise.all(notes.map((getNoteInfoFromFileName)))
 }
 
-export const getNoteInfoFromFileName = async (fileName: string): Promise<NoteInfo> => {
-    const fileStats = await stat(`${getRootDir()}${separator()}${fileName}`)
-    
-    return {
-        title: fileName.replace(".md", ""),
-        lastEditTime: fileStats.mtimeMs,
-    }
+export const readBlock: ReadBlock = async (id) => {
+    const index = await loadIndex()
+    const meta = index.blocks[id]
+    if (!meta) return { content: '' }
+
+    const content = await readFile(getBlockPath(meta.file), { encoding: fileEncoding })
+    return { content }
 }
 
-export const readNote: ReadNote = async (filename) => {
-    const rootDir = getRootDir()
+export const writeBlock: WriteBlock = async (id, content) => {
+    return withIndexLock(async () => {
+        const index = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return null
 
+        console.info(`Writing block ${id}`)
+        await writeFile(getBlockPath(meta.file), content.content, { encoding: fileEncoding })
 
-    const content = await readFile(`${rootDir}${separator()}${filename}.md`, {encoding:fileEncoding}) 
+        meta.updatedAt = Date.now()
+        meta.excerpt = makeExcerpt(content.content)
+        await writeJsonAtomic(getIndexPath(), index)
 
-    const noteContent: NoteContent = typeof content === 'string' ? { content } : content
-    return noteContent
+        return meta
+    })
 }
 
-export const writeNote: WriteNote = async (filename, content) =>{
-    const rootDir = getRootDir()
-    
-    console.info(`Writing note ${filename}`)
-    return writeFile(
-        `${rootDir}${separator()}${filename}.md`,
-        content.content,
-        { encoding: fileEncoding }
-      )
-}
-
-export const createNote:CreateNote= async () =>{
+export const createBlock: CreateBlock = async (content, category) => {
     const rootDir = getRootDir()
     await ensureDir(rootDir)
 
+    return withIndexLock(async () => {
+        const index = await loadIndex()
+        const id = randomUUID()
+        const file = `${id}.md`
+        const now = Date.now()
 
+        console.info(`Creating block ${id}`)
+        await writeFile(getBlockPath(file), content.content, { encoding: fileEncoding })
 
-    const {filePath, canceled} = await dialog.showSaveDialog({
-        title: 'New note',
-        defaultPath: `${rootDir}${separator()}Untitled.md`,
-        buttonLabel: 'Create',
-        properties: ['showOverwriteConfirmation'],
-        showsTagField: false,
-        filters:[
-            {name: 'Markdown', extensions: ['md']}
-        ]
+        const meta: BlockMeta = {
+            id,
+            file,
+            createdAt: now,
+            updatedAt: now,
+            category: category ?? null,
+            excerpt: makeExcerpt(content.content),
+        }
+        index.blocks[id] = meta
+        await writeJsonAtomic(getIndexPath(), index)
+
+        return meta
     })
-    if (canceled){
-        console.info('note creation canceled')
-        return false
-    }
-    const {name: filename, dir: parendDir} = path.parse(filePath)
-
-    if (parendDir !== rootDir){
-        dialog.showMessageBox({
-            type: 'error',
-            title: 'Creation Failed',
-            message: `All notes must be saved under ${rootDir}`
-        })
-        return false
-    }
-
-    console.info('creating note')
-    await writeFile(filePath, '')
-
-    return filename
 }
 
-export const deleteNote: DeleteNote = async (filename) =>{
-    const rootDir = getRootDir()
+export const appendToBlock: AppendToBlock = async (id, text) => {
+    return withIndexLock(async () => {
+        const index = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return null
 
-     const {response} = await dialog.showMessageBox({
+        const blockPath = getBlockPath(meta.file)
+        const existing = await readFile(blockPath, { encoding: fileEncoding })
+        const joined = existing.trim().length === 0 ? text : `${existing.trimEnd()}\n\n${text}`
+
+        console.info(`Appending to block ${id}`)
+        await writeFile(blockPath, joined, { encoding: fileEncoding })
+
+        meta.updatedAt = Date.now()
+        meta.excerpt = makeExcerpt(joined)
+        await writeJsonAtomic(getIndexPath(), index)
+
+        return meta
+    })
+}
+
+export const deleteBlock: DeleteBlock = async (id) => {
+    const index = await loadIndex()
+    const meta = index.blocks[id]
+    if (!meta) return false
+
+    const label = meta.excerpt || new Date(meta.createdAt).toLocaleString()
+
+    const { response } = await dialog.showMessageBox({
         type: 'warning',
-        title: 'delete note',
-        message: `Are you sure you want to delete ${filename}`,
+        title: 'delete note block',
+        message: `Are you sure you want to delete "${label}"?`,
         buttons: ['Delete', 'Cancel'],
         defaultId: 1,
         cancelId: 1,
     })
 
-    if(response == 1){
+    if (response == 1) {
         console.info("delete canceled")
         return false
     }
 
-    console.info('deleting note')
+    console.info('deleting block')
 
-    await remove(`${rootDir}${separator()}${filename}.md`)
+    return withIndexLock(async () => {
+        const freshIndex = await loadIndex()
+        const freshMeta = freshIndex.blocks[id]
+        if (!freshMeta) return false
 
-    return true
+        await remove(getBlockPath(freshMeta.file))
+        delete freshIndex.blocks[id]
+        await writeJsonAtomic(getIndexPath(), freshIndex)
+
+        return true
+    })
+}
+
+type GoalsFile = {
+    version: number
+    goals: Record<string, Goal>
+}
+
+// Missing or corrupt goals file degrades to empty.
+const loadGoalsFile = async (): Promise<GoalsFile> => {
+    try {
+        const raw = await readFile(getGoalsPath(), { encoding: fileEncoding })
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === 'object' && parsed.goals && typeof parsed.goals === 'object') {
+            return { version: 1, goals: parsed.goals }
+        }
+    } catch {
+        console.info('no readable goals file, starting fresh')
+    }
+    return { version: 1, goals: {} }
+}
+
+export const getGoals: GetGoals = async () => {
+    await ensureDir(getRootDir())
+    const goalsFile = await loadGoalsFile()
+    return Object.values(goalsFile.goals)
+}
+
+export const createGoal: CreateGoal = async (name, description) => {
+    await ensureDir(getRootDir())
+
+    return withIndexLock(async () => {
+        const goalsFile = await loadGoalsFile()
+        const goal: Goal = {
+            id: randomUUID(),
+            name: name.trim(),
+            description: description.trim(),
+            createdAt: Date.now(),
+        }
+
+        console.info(`Creating goal ${goal.id}`)
+        goalsFile.goals[goal.id] = goal
+        await writeJsonAtomic(getGoalsPath(), goalsFile)
+
+        return goal
+    })
+}
+
+const clampSettings = (settings: AppSettings): AppSettings => ({
+    blockWindowMinutes: Number.isFinite(settings.blockWindowMinutes)
+        ? Math.max(1, Math.round(settings.blockWindowMinutes))
+        : defaultSettings.blockWindowMinutes,
+})
+
+export const getSettings: GetSettings = async () => {
+    try {
+        const raw = await readFile(getSettingsPath(), { encoding: fileEncoding })
+        return clampSettings({ ...defaultSettings, ...JSON.parse(raw) })
+    } catch {
+        return defaultSettings
+    }
+}
+
+export const setSettings: SetSettings = async (patch) => {
+    const rootDir = getRootDir()
+    await ensureDir(rootDir)
+
+    const merged = clampSettings({ ...(await getSettings()), ...patch })
+    await writeJsonAtomic(getSettingsPath(), merged)
+
+    return merged
 }

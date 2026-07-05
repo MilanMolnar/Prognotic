@@ -1,4 +1,4 @@
-import { CreateNote, DeleteNote, GetNotes, ReadNote, WriteNote } from '@shared/types'
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 
 
@@ -12,20 +12,35 @@ try {
   contextBridge.exposeInMainWorld('context', {
     locale: navigator.language,
 
-    getNotes: (...args: Parameters<GetNotes>) => {
-      return ipcRenderer.invoke('getNotes', ...args)
+    getBlocks: (...args: Parameters<GetBlocks>) => {
+      return ipcRenderer.invoke('getBlocks', ...args)
     },
-    readNote: (...args: Parameters<ReadNote>) => {
-      return ipcRenderer.invoke('readNote', ...args)
+    readBlock: (...args: Parameters<ReadBlock>) => {
+      return ipcRenderer.invoke('readBlock', ...args)
     },
-    writeNote: (...args: Parameters<WriteNote>) =>{
-      return ipcRenderer.invoke('writeNote', ...args)
+    writeBlock: (...args: Parameters<WriteBlock>) => {
+      return ipcRenderer.invoke('writeBlock', ...args)
     },
-    createNote: (...args: Parameters<CreateNote>) =>{
-      return ipcRenderer.invoke('createNote', ...args)
+    createBlock: (...args: Parameters<CreateBlock>) => {
+      return ipcRenderer.invoke('createBlock', ...args)
     },
-    deleteNote: (...args: Parameters<DeleteNote>) =>{
-      return ipcRenderer.invoke('deleteNote', ...args)
+    appendToBlock: (...args: Parameters<AppendToBlock>) => {
+      return ipcRenderer.invoke('appendToBlock', ...args)
+    },
+    deleteBlock: (...args: Parameters<DeleteBlock>) => {
+      return ipcRenderer.invoke('deleteBlock', ...args)
+    },
+    getSettings: (...args: Parameters<GetSettings>) => {
+      return ipcRenderer.invoke('getSettings', ...args)
+    },
+    setSettings: (...args: Parameters<SetSettings>) => {
+      return ipcRenderer.invoke('setSettings', ...args)
+    },
+    getGoals: (...args: Parameters<GetGoals>) => {
+      return ipcRenderer.invoke('getGoals', ...args)
+    },
+    createGoal: (...args: Parameters<CreateGoal>) => {
+      return ipcRenderer.invoke('createGoal', ...args)
     },
   })
 } catch (error) {

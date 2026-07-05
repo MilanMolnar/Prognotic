@@ -1,4 +1,15 @@
+import { AppSettings } from "./models"
+
 export const appDirectory = "NoteMark"
 export const fileEncoding = "utf8"
 export const autoSavingTime = 3000
-export const onboardingNoteName = "Welcome.md"
+export const indexFileName = "index.json"
+export const settingsFileName = "settings.json"
+export const goalsFileName = "goals.json"
+// BlockMeta.category values: null = Quick Notes (unassigned), the constant
+// below = the pinned Research system topic, anything else = a Goal id.
+export const researchCategory = "research"
+export const excerptMaxLength = 80
+export const defaultSettings: AppSettings = {
+    blockWindowMinutes: 5,
+}

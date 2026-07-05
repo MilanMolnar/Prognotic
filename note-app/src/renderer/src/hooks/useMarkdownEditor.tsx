@@ -1,37 +1,42 @@
 import { MDXEditorMethods } from "@mdxeditor/editor";
-import { SelectedNote, useNoteActions, useNotes } from "@renderer/context";
+import { SelectedBlock, useBlockActions, useBlocks } from "@renderer/context";
 import { NoteContent } from "@shared/models";
 import { RefObject, useRef } from "react";
 import { throttle, DebouncedFuncLeading } from "lodash"
 import { autoSavingTime } from "@shared/constants";
 
 type UseMarkdownEditorResult = {
-    selectedNote: SelectedNote | null
+    selectedBlock: SelectedBlock | null
+    editorKey: string
     editorRef: RefObject<MDXEditorMethods | null>
     handleAutoSaving: DebouncedFuncLeading<(content: string | NoteContent) => Promise<void>>
     handleBlur: () => Promise<void>
 }
 
 export const useMarkdownEditor = (): UseMarkdownEditorResult => {
-    const { selectedNote } = useNotes();
-    const { saveNote } = useNoteActions()
+    const { selectedBlock, contentVersion } = useBlocks();
+    const { saveBlock } = useBlockActions()
     const editorRef = useRef<MDXEditorMethods>(null)
 
-    const handleAutoSaving = throttle( async (content: string | NoteContent) =>{
-        if (!selectedNote) return
+    // contentVersion bumps when a quick-input append touches the selected
+    // block, remounting the editor with the appended content.
+    const editorKey = selectedBlock ? `${selectedBlock.id}:${contentVersion}` : ''
 
-        console.log('auto saving....', selectedNote.title)
+    const handleAutoSaving = throttle( async (content: string | NoteContent) =>{
+        if (!selectedBlock) return
+
+        console.log('auto saving....', selectedBlock.id)
 
         const payload: NoteContent = typeof content === 'string' ? { content } : content
 
-        await saveNote(payload)
+        await saveBlock(payload)
         }, autoSavingTime, {
         leading: false,
         trailing: true
     } )
 
     const handleBlur = async (): Promise<void> => {
-        if(!selectedNote) return
+        if(!selectedBlock) return
 
         handleAutoSaving.cancel()
 
@@ -39,12 +44,13 @@ export const useMarkdownEditor = (): UseMarkdownEditorResult => {
 
 
         if (content != null){
-            await saveNote({content : content})
+            await saveBlock({content : content})
         }
     }
 
     return {
-        selectedNote,
+        selectedBlock,
+        editorKey,
         editorRef,
         handleAutoSaving,
         handleBlur
