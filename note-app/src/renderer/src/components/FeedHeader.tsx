@@ -17,7 +17,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
   const isEditView = selectedBlockId !== null
   const categoryLabel =
     selectedCategory === null
-      ? 'Quick Notes'
+      ? 'Quick Note'
       : selectedCategory === researchCategory
         ? 'Research'
         : (goals?.find((goal) => goal.id === selectedCategory)?.name ?? 'Goal')

@@ -10,6 +10,8 @@ export const goalsFileName = "goals.json"
 // below = the pinned Research system topic, anything else = a Goal id.
 export const researchCategory = "research"
 export const excerptMaxLength = 80
+export const maxPinnedGoals = 3
 export const defaultSettings: AppSettings = {
     blockWindowMinutes: 5,
+    pinnedGoalIds: [],
 }

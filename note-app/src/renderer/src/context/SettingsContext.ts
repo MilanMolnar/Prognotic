@@ -8,6 +8,7 @@ export type SettingsState = {
 
 export type SettingsActions = {
     updateSettings: (patch: Partial<AppSettings>) => Promise<void>
+    togglePinGoal: (goalId: string) => Promise<void>
 }
 
 export const SettingsStateContext = createContext<SettingsState | null>(null)

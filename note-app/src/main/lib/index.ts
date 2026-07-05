@@ -1,4 +1,4 @@
-import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, settingsFileName } from "@shared/constants"
+import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, maxPinnedGoals, settingsFileName } from "@shared/constants"
 import { AppSettings, BlockMeta, Goal } from "@shared/models"
 import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
@@ -305,6 +305,9 @@ const clampSettings = (settings: AppSettings): AppSettings => ({
     blockWindowMinutes: Number.isFinite(settings.blockWindowMinutes)
         ? Math.max(1, Math.round(settings.blockWindowMinutes))
         : defaultSettings.blockWindowMinutes,
+    pinnedGoalIds: Array.isArray(settings.pinnedGoalIds)
+        ? settings.pinnedGoalIds.filter((id): id is string => typeof id === 'string').slice(0, maxPinnedGoals)
+        : defaultSettings.pinnedGoalIds,
 })
 
 export const getSettings: GetSettings = async () => {

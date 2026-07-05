@@ -22,4 +22,5 @@ export type Goal = {
 
 export type AppSettings = {
     blockWindowMinutes: number
+    pinnedGoalIds: string[]
 }

@@ -1,4 +1,4 @@
-import { defaultSettings } from '@shared/constants'
+import { defaultSettings, maxPinnedGoals } from '@shared/constants'
 import { AppSettings } from '@shared/models'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -36,12 +36,29 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }): R
         setSettings(merged)
     }, [])
 
+    const togglePinGoal = useCallback(async (goalId: string) => {
+        const current = await window.context.getSettings()
+        const pinned = current.pinnedGoalIds ?? []
+        const next = pinned.includes(goalId)
+            ? pinned.filter((id) => id !== goalId)
+            : pinned.length >= maxPinnedGoals
+              ? pinned
+              : [...pinned, goalId]
+
+        setSettings((prev) => ({ ...prev, pinnedGoalIds: next }))
+        const merged = await window.context.setSettings({ pinnedGoalIds: next })
+        setSettings(merged)
+    }, [])
+
     const stateValue: SettingsState = useMemo(
         () => ({ settings, isLoaded }),
         [settings, isLoaded]
     )
 
-    const actionsValue: SettingsActions = useMemo(() => ({ updateSettings }), [updateSettings])
+    const actionsValue: SettingsActions = useMemo(
+        () => ({ updateSettings, togglePinGoal }),
+        [updateSettings, togglePinGoal]
+    )
 
     return (
         <SettingsStateContext.Provider value={stateValue}>
