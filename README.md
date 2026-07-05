@@ -80,8 +80,8 @@ Electron three-process model with a sandboxed renderer; all filesystem access go
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Renderer (React 19)                                    │
-│  Context providers, MDXEditor, Tailwind CSS               │
-│         │  window.context.*  (contextBridge)              │
+│  Context providers, MDXEditor, Tailwind CSS             │
+│         │  window.context.*  (contextBridge)            │
 ├─────────┼───────────────────────────────────────────────┤
 │  Preload                                                │
 ├─────────┼───────────────────────────────────────────────┤
@@ -169,7 +169,3 @@ npm run dev
 - **MDXEditor** — WYSIWYG Markdown editor
 - **Tailwind CSS v4** — styling
 - **fs-extra** — filesystem helpers in the main process
-
-## Roadmap
-
-See [`HighlevelRoadmap.md`](HighlevelRoadmap.md) for planned features: AI auto-sorting from Quick Notes into goals, conversational retrieval, staging inbox for AI research, voice capture, and more.
