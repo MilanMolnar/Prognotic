@@ -13,10 +13,11 @@ type UseBlockFeedResult = {
     handleBlockDelete: (id: string) => () => Promise<void>
 }
 
-// Blocks of the selected category in chat order: oldest at the top, newest
-// next to the capture bar at the bottom. While searching, fuzzy matches move
-// to the top ordered by relevance (best first); the rest keep chat order.
-export const useBlockFeed = (): UseBlockFeedResult => {
+// Blocks of the selected category. 'asc' is chat order: oldest at the top,
+// newest next to the capture bar at the bottom; 'desc' is natural order:
+// newest right under the writing surface. While searching, fuzzy matches
+// move to the top ordered by relevance (best first); the rest keep order.
+export const useBlockFeed = (order: 'asc' | 'desc' = 'asc'): UseBlockFeedResult => {
     const { blocks, blockContents, openBlockId } = useBlocks();
     const { selectedCategory } = useGoals();
     const { isSearchOpen, query } = useSearch();
@@ -27,8 +28,10 @@ export const useBlockFeed = (): UseBlockFeedResult => {
 
     const { feedBlocks, matchIds } = useMemo(() => {
         const categoryBlocks = blocks
-            ?.filter((block) => block.category === selectedCategory)
-            .sort((a, b) => a.createdAt - b.createdAt);
+            ?.filter((block) => block.categories.includes(selectedCategory))
+            .sort((a, b) =>
+                order === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
+            );
 
         if (!categoryBlocks || !isSearching) {
             return { feedBlocks: categoryBlocks, matchIds: new Set<string>() };
@@ -48,7 +51,7 @@ export const useBlockFeed = (): UseBlockFeedResult => {
             feedBlocks: [...matches, ...rest],
             matchIds: new Set(matches.map((block) => block.id))
         };
-    }, [blocks, blockContents, selectedCategory, isSearching, trimmedQuery]);
+    }, [blocks, blockContents, selectedCategory, isSearching, trimmedQuery, order]);
 
     const handleBlockSelect = (id: string | null) => () => {
         selectBlock(id);

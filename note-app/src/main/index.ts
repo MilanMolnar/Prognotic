@@ -1,9 +1,11 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, BrowserWindowConstructorOptions, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, BrowserWindowConstructorOptions, ipcMain, session, shell, systemPreferences } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
-import { appendToBlock, createBlock, createGoal, deleteBlock, getBlocks, getGoals, getSettings, readBlock, setSettings, writeBlock } from './lib'
-import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from '@shared/types'
+import { appendToBlock, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, getBlocks, getGoals, getSettings, readBlock, setSettings, updateBlockCategories, writeBlock } from './lib'
+import { toggleWindowsDictation } from './dictation/windows'
+import { transcribeAudio } from './dictation/wisprflow'
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
 
 const platformWindowOptions = (): BrowserWindowConstructorOptions => {
   if (process.platform === 'darwin') {
@@ -76,9 +78,21 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
+
+  if (process.platform === 'darwin') {
+    await systemPreferences.askForMediaAccess('microphone')
+  }
+
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'media')
+  })
+
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === 'media'
+  })
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -90,12 +104,16 @@ app.whenReady().then(() => {
   ipcMain.handle('readBlock', (_, ...args: Parameters<ReadBlock>) => readBlock(...args))
   ipcMain.handle('writeBlock', (_, ...args: Parameters<WriteBlock>) => writeBlock(...args))
   ipcMain.handle('createBlock', (_, ...args: Parameters<CreateBlock>) => createBlock(...args))
+  ipcMain.handle('updateBlockCategories', (_, ...args: Parameters<UpdateBlockCategories>) => updateBlockCategories(...args))
   ipcMain.handle('appendToBlock', (_, ...args: Parameters<AppendToBlock>) => appendToBlock(...args))
   ipcMain.handle('deleteBlock', (_, ...args: Parameters<DeleteBlock>) => deleteBlock(...args))
+  ipcMain.handle('deleteBlockIfEmpty', (_, ...args: Parameters<DeleteBlockIfEmpty>) => deleteBlockIfEmpty(...args))
   ipcMain.handle('getSettings', (_, ...args: Parameters<GetSettings>) => getSettings(...args))
   ipcMain.handle('setSettings', (_, ...args: Parameters<SetSettings>) => setSettings(...args))
   ipcMain.handle('getGoals', (_, ...args: Parameters<GetGoals>) => getGoals(...args))
   ipcMain.handle('createGoal', (_, ...args: Parameters<CreateGoal>) => createGoal(...args))
+  ipcMain.handle('transcribeAudio', (_, ...args: Parameters<TranscribeAudio>) => transcribeAudio(...args))
+  ipcMain.handle('toggleWindowsDictation', (event) => toggleWindowsDictation(event.sender))
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

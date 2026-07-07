@@ -19,15 +19,17 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
   } = useBlockFeed()
   const { selectedCategory } = useGoals()
 
-  // Keep the newest block visible next to the capture bar (chat-style);
-  // while searching the best match sits at the top instead.
+  // Keep the newest text visible next to the capture bar (chat-style);
+  // while searching the best match sits at the top instead. blockContents is
+  // a dependency because appends grow the open block without changing the
+  // block count — the feed must follow those too.
   const scrollRef = useRef<HTMLDivElement>(null)
   const blockCount = feedBlocks?.length ?? 0
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: isSearching ? 0 : scrollRef.current.scrollHeight
     })
-  }, [blockCount, selectedCategory, isSearching])
+  }, [blockCount, blockContents, selectedCategory, isSearching])
 
   if (!feedBlocks) return null
 

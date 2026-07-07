@@ -12,7 +12,7 @@ export const CollapsedSidebar = (): JSX.Element => {
     <div className="flex h-full flex-col items-center justify-end gap-2 pb-1">
       <SettingsButton />
       <ActionButton onClick={toggleLeftPanel} title="Expand sidebar">
-        <LuPanelLeftOpen className="w-4 h-4 text-zinc-300" />
+        <LuPanelLeftOpen className="h-4 w-4 text-zinc-300" />
       </ActionButton>
     </div>
   )

@@ -1,3 +1,4 @@
+import { ActionButton } from '@/components'
 import { usePanelActions, usePanels } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { FormEvent, JSX, MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react'
@@ -147,26 +148,22 @@ export const ChatPanel = (): JSX.Element => {
             </button>
           </form>
 
-          <div className="mt-2 pt-2 border-t border-white/10 flex">
-            <button
+          <div className="mt-2 border-t border-white/10 pt-2">
+            <ActionButton
               onClick={toggleRightPanel}
               title="Collapse assistant"
-              className="px-2 py-1 rounded-md border border-yellow-500/50 hover:bg-yellow-500/10 transition-colors duration-100"
+              className="border-yellow-500/50 hover:bg-yellow-500/10"
             >
-              <LuPanelRightClose className="w-4 h-4 text-yellow-500" />
-            </button>
+              <LuPanelRightClose className="h-4 w-4 text-yellow-500" />
+            </ActionButton>
           </div>
         </>
       ) : (
         <div className="flex h-full flex-col items-center justify-end gap-3 pb-1">
           <LuSparkles className="w-4 h-4 text-zinc-600" />
-          <button
-            onClick={toggleRightPanel}
-            title="Open assistant"
-            className="px-2 py-1 rounded-md border border-zinc-400/50 hover:bg-zinc-600/50 transition-colors duration-100"
-          >
-            <LuPanelRightOpen className="w-4 h-4 text-zinc-300" />
-          </button>
+          <ActionButton onClick={toggleRightPanel} title="Open assistant">
+            <LuPanelRightOpen className="h-4 w-4 text-zinc-300" />
+          </ActionButton>
         </div>
       )}
     </aside>

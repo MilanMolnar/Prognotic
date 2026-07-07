@@ -1,5 +1,5 @@
-import { BlockFeed, MarkdownEditor } from '@/components'
-import { useBlockActions, useBlocks, useSearch } from '@renderer/context'
+import { BlockFeed, MarkdownEditor, NaturalCapturePanel } from '@/components'
+import { useBlockActions, useBlocks, useSearch, useSettings } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { ComponentProps, JSX, useEffect, useRef } from 'react'
 import { LuX } from 'react-icons/lu'
@@ -13,6 +13,7 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
   const { selectedBlockId, selectedBlock, contentVersion } = useBlocks()
   const { selectBlock } = useBlockActions()
   const { isSearchOpen, query } = useSearch()
+  const { settings } = useSettings()
 
   // In-editor find: paints every case-insensitive occurrence of the query
   // inside the open block via the CSS Custom Highlight API — no DOM
@@ -50,7 +51,11 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
   }, [isSearchOpen, trimmedQuery, selectedBlockId, contentVersion])
 
   if (selectedBlockId === null) {
-    return <BlockFeed className={className} {...props} />
+    return settings.captureMode === 'natural' ? (
+      <NaturalCapturePanel className={className} {...props} />
+    ) : (
+      <BlockFeed className={className} {...props} />
+    )
   }
 
   return (

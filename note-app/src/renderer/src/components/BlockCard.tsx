@@ -1,6 +1,7 @@
+import { BlockContextMenu } from '@/components'
 import { blockLabel, cn, formatDateFromMs } from '@renderer/utils'
 import { BlockMeta } from '@shared/models'
-import { JSX } from 'react'
+import { JSX, MouseEvent, useState } from 'react'
 import { FaRegTrashAlt } from 'react-icons/fa'
 
 export type BlockCardProps = {
@@ -21,14 +22,28 @@ export const BlockCard = ({
   onDelete
 }: BlockCardProps): JSX.Element => {
   const date = formatDateFromMs(block.createdAt)
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
+
+  const handleContextMenu = (event: MouseEvent): void => {
+    event.preventDefault()
+    setMenuPosition({ x: event.clientX, y: event.clientY })
+  }
 
   return (
-    // A fieldset so the legend timestamp sits in a real gap of the border
-    // line — no background masking needed over the translucent theme.
+    // The context menu is a sibling (not a child) of the card: portal events
+    // bubble through the React tree, so nesting it would make menu clicks
+    // trigger the card's onSelect.
+    <>
+    {/* A fieldset so the legend timestamp sits in a real gap of the border
+        line — no background masking needed over the translucent theme. */}
     <fieldset
       onClick={onSelect}
+      onContextMenu={handleContextMenu}
       className={cn(
         'group relative min-w-0 cursor-pointer rounded-md border px-3 pb-2 transition-colors duration-100',
+        // While its context menu is open the card shares the menu's darker
+        // background, marking which block the actions target.
+        menuPosition !== null && 'bg-zinc-900/95',
         isOpen
           ? 'border-yellow-500/50'
           : isMatch
@@ -57,7 +72,26 @@ export const BlockCard = ({
       >
         <FaRegTrashAlt className="w-3.5 h-3.5" />
       </button>
-      <p className="whitespace-pre-wrap text-sm text-zinc-200">{content ?? 'Loading...'}</p>
+      {/* Paragraphs (blank-line separated) render with a small margin
+          instead of pre-wrap's full-height empty lines, keeping the card
+          compact; single line breaks inside a paragraph are preserved. */}
+      <div className="text-sm leading-snug text-zinc-200">
+        {content !== undefined
+          ? content.split(/\n{2,}/).map((paragraph, index) => (
+              <p key={index} className="my-1 whitespace-pre-wrap first:mt-0 last:mb-0">
+                {paragraph}
+              </p>
+            ))
+          : 'Loading...'}
+      </div>
     </fieldset>
+    {menuPosition && (
+      <BlockContextMenu
+        block={block}
+        position={menuPosition}
+        onClose={() => setMenuPosition(null)}
+      />
+    )}
+    </>
   )
 }

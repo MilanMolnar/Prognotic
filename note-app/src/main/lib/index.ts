@@ -1,6 +1,6 @@
 import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, maxPinnedGoals, settingsFileName } from "@shared/constants"
 import { AppSettings, BlockMeta, Goal } from "@shared/models"
-import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from "@shared/types"
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
 import { dialog } from "electron"
 import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "fs-extra"
@@ -44,19 +44,43 @@ const writeJsonAtomic = async (filePath: string, data: unknown): Promise<void> =
     await rename(tmpPath, filePath)
 }
 
-// Missing or corrupt index degrades to empty; getBlocks rebuilds it
-// from the markdown files on disk.
-const loadIndex = async (): Promise<BlockIndex> => {
+// A block always belongs to at least one category; duplicates are dropped.
+const normalizeCategories = (categories: (string | null)[]): (string | null)[] => {
+    const unique = [...new Set(categories)]
+    return unique.length > 0 ? unique : [null]
+}
+
+// Entries written before multi-goal support carry a single `category`
+// (string | null) instead of `categories`.
+type LegacyBlockMeta = Omit<BlockMeta, 'categories'> & { category: string | null }
+
+const migrateBlockMeta = (raw: BlockMeta | LegacyBlockMeta): BlockMeta => {
+    if ('categories' in raw && Array.isArray(raw.categories)) return raw
+    const { category, ...rest } = raw as LegacyBlockMeta
+    return { ...rest, categories: [category ?? null] }
+}
+
+// Missing or corrupt index degrades to empty; getBlocks rebuilds it from the
+// markdown files on disk. Legacy single-category entries are migrated in
+// memory here — `migrated` tells getBlocks to persist the new shape.
+const loadIndex = async (): Promise<{ index: BlockIndex; migrated: boolean }> => {
     try {
         const raw = await readFile(getIndexPath(), { encoding: fileEncoding })
         const parsed = JSON.parse(raw)
         if (parsed && typeof parsed === 'object' && parsed.blocks && typeof parsed.blocks === 'object') {
-            return { version: 1, blocks: parsed.blocks }
+            const blocks: Record<string, BlockMeta> = {}
+            let migrated = false
+            for (const [id, rawMeta] of Object.entries(parsed.blocks)) {
+                const meta = migrateBlockMeta(rawMeta as BlockMeta | LegacyBlockMeta)
+                if (meta !== rawMeta) migrated = true
+                blocks[id] = meta
+            }
+            return { index: { version: 1, blocks }, migrated }
         }
     } catch {
         console.info('no readable block index, starting fresh')
     }
-    return { version: 1, blocks: {} }
+    return { index: { version: 1, blocks: {} }, migrated: false }
 }
 
 export const makeExcerpt = (content: string): string => {
@@ -79,8 +103,9 @@ export const getBlocks: GetBlocks = async () => {
     await ensureDir(rootDir)
 
     return withIndexLock(async () => {
-        const index = await loadIndex()
-        let changed = false
+        const { index, migrated } = await loadIndex()
+        // A legacy-shape index gets rewritten in the migrated shape.
+        let changed = migrated
 
         const fileNames = await readdir(rootDir)
         const mdFiles = new Set(fileNames.filter((fileName) => fileName.endsWith('.md')))
@@ -110,7 +135,7 @@ export const getBlocks: GetBlocks = async () => {
                 // createdAt land after updatedAt
                 createdAt: Math.min(fileStats.birthtimeMs || fileStats.mtimeMs, fileStats.mtimeMs),
                 updatedAt: fileStats.mtimeMs,
-                category: null,
+                categories: [null],
                 excerpt: makeExcerpt(content) || file.replace('.md', ''),
             }
             changed = true
@@ -131,7 +156,7 @@ export const getBlocks: GetBlocks = async () => {
                 file,
                 createdAt: backdated,
                 updatedAt: backdated,
-                category: null,
+                categories: [null],
                 excerpt: makeExcerpt(content),
             }
             changed = true
@@ -146,7 +171,7 @@ export const getBlocks: GetBlocks = async () => {
 }
 
 export const readBlock: ReadBlock = async (id) => {
-    const index = await loadIndex()
+    const { index } = await loadIndex()
     const meta = index.blocks[id]
     if (!meta) return { content: '' }
 
@@ -156,7 +181,7 @@ export const readBlock: ReadBlock = async (id) => {
 
 export const writeBlock: WriteBlock = async (id, content) => {
     return withIndexLock(async () => {
-        const index = await loadIndex()
+        const { index } = await loadIndex()
         const meta = index.blocks[id]
         if (!meta) return null
 
@@ -171,12 +196,12 @@ export const writeBlock: WriteBlock = async (id, content) => {
     })
 }
 
-export const createBlock: CreateBlock = async (content, category) => {
+export const createBlock: CreateBlock = async (content, categories) => {
     const rootDir = getRootDir()
     await ensureDir(rootDir)
 
     return withIndexLock(async () => {
-        const index = await loadIndex()
+        const { index } = await loadIndex()
         const id = randomUUID()
         const file = `${id}.md`
         const now = Date.now()
@@ -189,7 +214,7 @@ export const createBlock: CreateBlock = async (content, category) => {
             file,
             createdAt: now,
             updatedAt: now,
-            category: category ?? null,
+            categories: normalizeCategories(categories),
             excerpt: makeExcerpt(content.content),
         }
         index.blocks[id] = meta
@@ -199,9 +224,26 @@ export const createBlock: CreateBlock = async (content, category) => {
     })
 }
 
+// Re-homes a block: sets the full category list (the single .md file is
+// shared by every category — nothing is duplicated on disk). Does not bump
+// updatedAt, so re-categorizing never reopens or reorders a block.
+export const updateBlockCategories: UpdateBlockCategories = async (id, categories) => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return null
+
+        console.info(`Updating categories of block ${id}`)
+        meta.categories = normalizeCategories(categories)
+        await writeJsonAtomic(getIndexPath(), index)
+
+        return meta
+    })
+}
+
 export const appendToBlock: AppendToBlock = async (id, text) => {
     return withIndexLock(async () => {
-        const index = await loadIndex()
+        const { index } = await loadIndex()
         const meta = index.blocks[id]
         if (!meta) return null
 
@@ -221,7 +263,7 @@ export const appendToBlock: AppendToBlock = async (id, text) => {
 }
 
 export const deleteBlock: DeleteBlock = async (id) => {
-    const index = await loadIndex()
+    const { index } = await loadIndex()
     const meta = index.blocks[id]
     if (!meta) return false
 
@@ -244,13 +286,42 @@ export const deleteBlock: DeleteBlock = async (id) => {
     console.info('deleting block')
 
     return withIndexLock(async () => {
-        const freshIndex = await loadIndex()
+        const { index: freshIndex } = await loadIndex()
         const freshMeta = freshIndex.blocks[id]
         if (!freshMeta) return false
 
         await remove(getBlockPath(freshMeta.file))
         delete freshIndex.blocks[id]
         await writeJsonAtomic(getIndexPath(), freshIndex)
+
+        return true
+    })
+}
+
+// Silent counterpart to deleteBlock for automatic cleanup of blocks left
+// with no meaningful content. The emptiness check runs under the index lock,
+// so an in-flight save (which queues ahead of this call) always wins — a
+// block that just received text is never deleted. The seeded welcome block
+// is safe by the same rule: it has content unless the user cleared it.
+export const deleteBlockIfEmpty: DeleteBlockIfEmpty = async (id) => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return false
+
+        const blockPath = getBlockPath(meta.file)
+        let content = ''
+        try {
+            content = await readFile(blockPath, { encoding: fileEncoding })
+        } catch {
+            // Unreadable or missing file — treat as empty and drop the entry.
+        }
+        if (content.trim().length > 0) return false
+
+        console.info(`Deleting empty block ${id}`)
+        await remove(blockPath)
+        delete index.blocks[id]
+        await writeJsonAtomic(getIndexPath(), index)
 
         return true
     })
@@ -308,6 +379,15 @@ const clampSettings = (settings: AppSettings): AppSettings => ({
     pinnedGoalIds: Array.isArray(settings.pinnedGoalIds)
         ? settings.pinnedGoalIds.filter((id): id is string => typeof id === 'string').slice(0, maxPinnedGoals)
         : defaultSettings.pinnedGoalIds,
+    captureMode: settings.captureMode === 'natural' ? 'natural' : 'chat',
+    dictationMode: ((): AppSettings['dictationMode'] => {
+        const raw = settings.dictationMode as string
+        if (raw === 'online' || raw === 'browser-only' || raw === 'local') return 'windows'
+        return raw === 'windows' || raw === 'whisprflow' ? raw : defaultSettings.dictationMode
+    })(),
+    whisprflowApiKey: typeof settings.whisprflowApiKey === 'string'
+        ? settings.whisprflowApiKey
+        : defaultSettings.whisprflowApiKey,
 })
 
 export const getSettings: GetSettings = async () => {

@@ -11,9 +11,11 @@ npm run dev
 
 ## Features
 
-- **Goals sidebar** — Quick Notes, Research (pinned), and custom goals with sliding yellow selection indicator
-- **Block feed** — time-stamped cards filtered by selected goal; short label (first ~5 words) + timestamp in the border
+- **Goals sidebar** — Quick Notes, Research (pinned), and custom goals with sliding yellow selection indicator; pin up to 3 goals
+- **Block feed** — time-stamped cards filtered by selected goal; short label (first ~5 words) + timestamp in the border; right-click for quick actions (e.g. send to Research)
+- **Two capture modes** — **Chat** (feed + bottom input) or **Natural** (pinned writing surface, blocks collapse below); toggle in the top bar
 - **Quick capture** — chat-style input with Markdown toolbar; time-windowed append vs new block
+- **Dictation** — Windows voice typing (Win+H) or Wispr Flow (BYOK); mic button in the capture bar and natural editor
 - **Block editor** — click a block for full MDXEditor with live Markdown shortcuts
 - **Top bar search** — fuzzy filter/reorder in goal view; in-block highlight in edit view
 - **Collapsible panels** — left goals (default open), right AI assistant (default closed, UI only)
@@ -32,16 +34,27 @@ npm run dev
 
 ```
 App.tsx
-├── DraggableTopBar — Prognotic | FeedHeader (search)
+├── DraggableTopBar — Prognotic | FeedHeader (search) | CaptureModeToggle
 └── RootLayout
     ├── Sidebar — CategorySidebar | CollapsedSidebar
-    ├── Content — BlockPanel (BlockFeed | MarkdownEditor), CaptureBar
+    ├── Content — BlockPanel (BlockFeed | NaturalCapturePanel | MarkdownEditor), CaptureBar
     └── ChatPanel
 ```
 
 ## Context providers
 
 `SettingsProvider` → `GoalsProvider` → `BlocksProvider` → `SearchProvider` → `PanelsProvider`
+
+All global state uses React Context — there is no Jotai in this codebase.
+
+## Dictation
+
+Two BYOK-free/BYOK providers, selected in Settings (`AppSettings.dictationMode`):
+
+- **`windows`** — simulates Win+H to open Windows' system voice typing (no API key, Windows only)
+- **`whisprflow`** — records in the renderer, transcribes via the [Wispr Flow](https://wisprflow.ai) developer API in the main process (key never crosses IPC)
+
+See `note-app/src/main/dictation/` and `note-app/src/renderer/src/hooks/useDictation.tsx`.
 
 ## IPC
 

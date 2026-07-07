@@ -20,6 +20,19 @@ export type BlocksActions = {
     selectBlock: (id: string | null) => void
     submitQuickNote: (text: string) => Promise<void>
     saveBlock: (content: NoteContent) => Promise<void>
+    // Natural capture: full-content write to a known block (keeps its window
+    // alive via the bumped updatedAt) and session start in an explicit
+    // category (the new block becomes the open one).
+    updateBlockContent: (id: string, content: NoteContent) => Promise<void>
+    createCaptureBlock: (content: string, category: string | null) => Promise<BlockMeta>
+    // Multi-goal plumbing: replaces the block's full category list.
+    updateBlockCategories: (id: string, categories: (string | null)[]) => Promise<void>
+    // Silent delete for blocks left blank — no confirmation dialog; the
+    // emptiness check is atomic in the main process.
+    cleanupBlockIfEmpty: (id: string) => Promise<void>
+    // Manually finalizes the active capture session; callers must flush any
+    // unsaved capture text first.
+    closeOpenBlock: () => void
     deleteBlock: (id: string) => Promise<void>
 }
 

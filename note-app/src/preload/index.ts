@@ -1,4 +1,4 @@
-import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, WriteBlock } from '@shared/types'
+import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 
 
@@ -11,6 +11,7 @@ try {
   // the ipcRenderer without exposing the entire object
   contextBridge.exposeInMainWorld('context', {
     locale: navigator.language,
+    platform: process.platform,
 
     getBlocks: (...args: Parameters<GetBlocks>) => {
       return ipcRenderer.invoke('getBlocks', ...args)
@@ -24,11 +25,17 @@ try {
     createBlock: (...args: Parameters<CreateBlock>) => {
       return ipcRenderer.invoke('createBlock', ...args)
     },
+    updateBlockCategories: (...args: Parameters<UpdateBlockCategories>) => {
+      return ipcRenderer.invoke('updateBlockCategories', ...args)
+    },
     appendToBlock: (...args: Parameters<AppendToBlock>) => {
       return ipcRenderer.invoke('appendToBlock', ...args)
     },
     deleteBlock: (...args: Parameters<DeleteBlock>) => {
       return ipcRenderer.invoke('deleteBlock', ...args)
+    },
+    deleteBlockIfEmpty: (...args: Parameters<DeleteBlockIfEmpty>) => {
+      return ipcRenderer.invoke('deleteBlockIfEmpty', ...args)
     },
     getSettings: (...args: Parameters<GetSettings>) => {
       return ipcRenderer.invoke('getSettings', ...args)
@@ -41,6 +48,12 @@ try {
     },
     createGoal: (...args: Parameters<CreateGoal>) => {
       return ipcRenderer.invoke('createGoal', ...args)
+    },
+    transcribeAudio: (...args: Parameters<TranscribeAudio>) => {
+      return ipcRenderer.invoke('transcribeAudio', ...args)
+    },
+    toggleWindowsDictation: () => {
+      return ipcRenderer.invoke('toggleWindowsDictation')
     },
   })
 } catch (error) {

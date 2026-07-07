@@ -77,3 +77,18 @@
   background-color: rgb(234 179 8 / 0.35);
   color: white;
 }
+
+/* Natural capture: Lexical keeps an empty <p><br></p> while idle and adds a
+   second one on focus. Collapse extras only while markdown is still empty —
+   tracked via .natural-capture-editor--empty, not DOM heuristics. */
+.natural-capture-editor [contenteditable='true'] {
+  min-height: 0;
+}
+
+.natural-capture-editor [contenteditable='true'] > p {
+  margin-block: 0;
+}
+
+.natural-capture-editor--empty [contenteditable='true'] > p:not(:first-child) {
+  display: none;
+}

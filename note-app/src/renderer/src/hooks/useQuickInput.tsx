@@ -1,5 +1,5 @@
 import { useBlockActions } from "@renderer/context";
-import { KeyboardEvent, RefObject, useRef, useState } from "react";
+import { KeyboardEvent, RefObject, useCallback, useRef, useState } from "react";
 
 export type MarkdownFormat = 'heading' | 'bold' | 'italic' | 'list' | 'code'
 
@@ -11,6 +11,7 @@ type UseQuickInputResult = {
     submit: () => Promise<void>
     handleKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
     applyFormat: (format: MarkdownFormat) => void
+    appendTranscript: (chunk: string) => void
 }
 
 export const useQuickInput = (): UseQuickInputResult => {
@@ -18,6 +19,8 @@ export const useQuickInput = (): UseQuickInputResult => {
     const [text, setText] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const textRef = useRef(text);
+    textRef.current = text;
 
     const submit = async (): Promise<void> => {
         const trimmed = text.trim();
@@ -72,6 +75,28 @@ export const useQuickInput = (): UseQuickInputResult => {
         });
     };
 
+    // Inserts dictated text at the caret so the user can review before Send.
+    const appendTranscript = useCallback((chunk: string): void => {
+        const trimmed = chunk.trim();
+        if (!trimmed) return;
+
+        const textarea = textareaRef.current;
+        const prev = textRef.current;
+        const start = textarea?.selectionStart ?? prev.length;
+        const end = textarea?.selectionEnd ?? prev.length;
+        const before = prev.slice(0, start);
+        const after = prev.slice(end);
+        const needsSpaceBefore = before.length > 0 && !/\s$/.test(before);
+        const insert = `${needsSpaceBefore ? ' ' : ''}${trimmed}`;
+        const next = before + insert + after;
+        const cursor = before.length + insert.length;
+        setText(next);
+        requestAnimationFrame(() => {
+            textarea?.focus();
+            textarea?.setSelectionRange(cursor, cursor);
+        });
+    }, []);
+
     return {
         text,
         setText,
@@ -79,6 +104,7 @@ export const useQuickInput = (): UseQuickInputResult => {
         textareaRef,
         submit,
         handleKeyDown,
-        applyFormat
+        applyFormat,
+        appendTranscript
     };
 }

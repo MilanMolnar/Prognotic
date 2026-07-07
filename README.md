@@ -6,10 +6,13 @@ A desktop note-taking and knowledge-capture app built with **Electron**, **React
 
 ## Features
 
-- **Goal-based organization** — pinned system categories (**Quick Notes**, **Research**) plus user-defined goals with name and description
+- **Goal-based organization** — pinned system categories (**Quick Notes**, **Research**) plus user-defined goals with name and description; up to 3 goals can be pinned to the top of the sidebar
+- **Multi-goal blocks** — a block can belong to more than one category at once (e.g. "send to Research" from the context menu) without duplicating its content on disk
 - **Time-windowed blocks** — quick capture appends to the open block within a configurable window (default 5 minutes), then starts a new block
-- **Block feed** — chronological cards with short label, timestamp, and dim borders; click to edit in-place with live Markdown shortcuts
-- **Chat-style capture bar** — bottom input with Markdown toolbar (heading, bold, italic, list, code); shows which block you are appending to or **new** when the window has expired
+- **Two capture styles** — **Chat** mode (feed with a send bar at the bottom) or **Natural** mode (a document-style writing surface pinned at the top, with finalized blocks collapsing into cards below); toggle from the top bar, persisted in settings
+- **Block feed** — chronological cards with short label, timestamp, and dim borders; click to edit in-place with live Markdown shortcuts; right-click for quick actions
+- **Chat-style capture bar** — bottom input with Markdown toolbar (heading, bold, italic, list, code) and a dictation mic; shows which block you are appending to or **new** when the window has expired
+- **Dictation** — **Windows voice typing** (Win+H, no key needed) or **Wispr Flow** (BYOK cloud transcription); selectable in Settings
 - **Context-aware search** — fuzzy search across blocks in the selected goal from the top bar; in-block find/highlight when editing
 - **Collapsible side panels** — goals sidebar (open by default) and AI assistant panel (closed by default, UI shell only)
 - **Resizable assistant panel** — drag the divider between main content and chat to adjust width
@@ -67,11 +70,11 @@ Switching goals exits block edit mode and clears search.
 
 ### Settings
 
-Open the cog in the left sidebar to adjust **block window minutes** — how long after your last write a block stays "open" for appends.
+Open the cog in the left sidebar to adjust **block window minutes** (how long after your last write a block stays "open" for appends) and **dictation mode** (Windows voice typing, or Wispr Flow with your own API key from platform.wisprflow.ai).
 
 ### AI assistant
 
-The right panel is a **UI shell only**: message list, input, and placeholder replies. LLM integration and note querying are planned (see `HighlevelRoadmap.md`).
+The right panel is a **UI shell only**: message list, input, and placeholder replies. LLM integration and note querying are planned (see [`AI_PLAN.MD`](./AI_PLAN.MD) for the phased roadmap).
 
 ## Architecture
 
@@ -99,12 +102,17 @@ Electron three-process model with a sandboxed renderer; all filesystem access go
 | `getBlocks()` | List all blocks from `index.json`, synced with `.md` files on disk |
 | `readBlock(id)` | Read a block's Markdown content |
 | `writeBlock(id, content)` | Write content; updates excerpt and timestamp |
-| `createBlock(content, category)` | Create a new block in the given category |
+| `createBlock(content, categories)` | Create a new block in the given categories |
+| `updateBlockCategories(id, categories)` | Replace a block's full category list (multi-goal) |
 | `appendToBlock(id, text)` | Append text to an existing block |
-| `deleteBlock(id)` | Confirm and delete a block |
+| `deleteBlock(id)` | Confirm (dialog) and delete a block |
+| `deleteBlockIfEmpty(id)` | Silently delete a block only if its content is blank — no dialog |
 | `getGoals()` | List user-defined goals |
 | `createGoal(name, description)` | Create a goal |
 | `getSettings()` / `setSettings(patch)` | Read/write app settings |
+| `transcribeAudio(audio)` | Send a recorded clip to the Wispr Flow API for transcription (BYOK) |
+| `toggleWindowsDictation()` | Focus the window and send Win+H to open Windows voice typing |
+| `locale` / `platform` | Plain values (not calls) exposed by the preload script |
 
 ### State management
 
@@ -123,13 +131,17 @@ React Context providers (see `note-app/src/renderer/src/main.tsx`):
 | Path | Role |
 |------|------|
 | `note-app/src/main/lib/index.ts` | Block/goal/settings persistence |
+| `note-app/src/main/dictation/windows.ts` / `wisprflow.ts` | Dictation providers |
 | `note-app/src/renderer/src/context/BlocksProvider.tsx` | Block lifecycle and capture logic |
 | `note-app/src/renderer/src/components/CategorySidebar.tsx` | Goals sidebar |
-| `note-app/src/renderer/src/components/BlockFeed.tsx` / `BlockCard.tsx` | Block feed UI |
-| `note-app/src/renderer/src/components/CaptureBar.tsx` | Quick capture input |
+| `note-app/src/renderer/src/components/BlockFeed.tsx` / `BlockCard.tsx` | Block feed UI (chat mode) |
+| `note-app/src/renderer/src/components/NaturalCapturePanel.tsx` / `NaturalCaptureEditor.tsx` | Natural capture mode |
+| `note-app/src/renderer/src/components/CaptureBar.tsx` | Quick capture input (chat mode) |
 | `note-app/src/renderer/src/components/FeedHeader.tsx` | Top bar search |
 | `note-app/src/renderer/src/components/ChatPanel.tsx` | AI assistant shell |
-| `note-app/src/shared/models.ts` | `BlockMeta`, `Goal`, `AppSettings` |
+| `note-app/src/shared/models.ts` | `BlockMeta`, `Goal`, `AppSettings`, `CaptureMode`, `DictationMode` |
+
+See [`note-app/DEVELOPER.md`](./note-app/DEVELOPER.md) for the full architecture, IPC table, and sequence diagrams, and [`TODO.md`](./TODO.md) for known issues and improvement ideas.
 
 ## Development
 

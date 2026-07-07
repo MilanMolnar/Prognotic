@@ -1,10 +1,11 @@
-import { NewGoalButton, SettingsButton } from '@/components'
+import { ActionButton, NewGoalButton, SettingsButton } from '@/components'
 import {
   CategoryKey,
   useBlockActions,
   useGoalActions,
   useGoals,
   usePanelActions,
+  usePanels,
   useSearchActions,
   useSettings,
   useSettingsActions
@@ -36,6 +37,9 @@ type SelectableItemProps = {
   label: string
   onClick: () => void
   itemRef: (element: HTMLElement | null) => void
+  // Stable DOM hook (data-category-row) so transient effects outside this
+  // component — e.g. the "send to research" flight — can find the row.
+  categoryRowId: string
   leading?: ReactNode
   trailing?: ReactNode
 }
@@ -44,11 +48,13 @@ const SelectableItem = ({
   label,
   onClick,
   itemRef,
+  categoryRowId,
   leading,
   trailing
 }: SelectableItemProps): JSX.Element => (
   <li
     ref={itemRef}
+    data-category-row={categoryRowId}
     onClick={onClick}
     className={cn(
       goalRowClass,
@@ -65,10 +71,11 @@ type SystemButtonProps = {
   label: string
   onClick: () => void
   itemRef: (element: HTMLElement | null) => void
+  categoryRowId: string
 }
 
-const SystemItem = ({ label, onClick, itemRef }: SystemButtonProps): JSX.Element => (
-  <SelectableItem label={label} onClick={onClick} itemRef={itemRef} />
+const SystemItem = ({ label, onClick, itemRef, categoryRowId }: SystemButtonProps): JSX.Element => (
+  <SelectableItem label={label} onClick={onClick} itemRef={itemRef} categoryRowId={categoryRowId} />
 )
 
 const SectionLabel = ({ children }: { children: string }): JSX.Element => (
@@ -81,6 +88,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const { selectBlock } = useBlockActions()
   const { closeSearch } = useSearchActions()
   const { toggleLeftPanel } = usePanelActions()
+  const { isLeftPanelOpen } = usePanels()
   const { settings } = useSettings()
   const { togglePinGoal } = useSettingsActions()
   const [search, setSearch] = useState('')
@@ -148,18 +156,34 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const visibleUnpinnedGoals = unpinnedGoals.filter((goal) => matchesGoalName(goal.name))
 
   useLayoutEffect(() => {
-    updateIndicator()
-  }, [updateIndicator, pinnedGoals.length, visibleUnpinnedGoals.length, goals?.length, isGoalSearchOpen])
+    const frame = requestAnimationFrame(updateIndicator)
+    return () => cancelAnimationFrame(frame)
+  }, [updateIndicator, pinnedGoals.length, visibleUnpinnedGoals.length, goals?.length, isGoalSearchOpen, isLeftPanelOpen])
+
+  // Sidebar width animates over 200ms on open/close — remeasure after it settles.
+  useLayoutEffect(() => {
+    if (!isLeftPanelOpen) return
+    const frame = requestAnimationFrame(() => updateIndicator())
+    const timer = window.setTimeout(updateIndicator, 220)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [isLeftPanelOpen, updateIndicator])
 
   useLayoutEffect(() => {
     const container = listContainerRef.current
     if (!container) return
 
     const onScroll = (): void => updateIndicator()
+    const resizeObserver = new ResizeObserver(() => updateIndicator())
+    resizeObserver.observe(container)
+
     container.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll)
 
     return () => {
+      resizeObserver.disconnect()
       container.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
@@ -211,7 +235,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
           />
         )}
 
-        <div className="relative z-10 mb-1 flex w-full items-center gap-1">
+        <div className="relative z-10 mb-2.5 flex w-full items-center gap-1">
           {isGoalSearchOpen ? (
             <div
               ref={registerSearchRowRef}
@@ -245,18 +269,20 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               <LuSearch className="h-4 w-4 text-zinc-400" />
             </button>
           )}
-          <NewGoalButton className="ml-auto h-9 shrink-0 px-2.5 py-0 flex items-center justify-center border-zinc-400/50" />
+          <NewGoalButton className="ml-auto" />
         </div>
 
         <ul className="space-y-1">
           <SystemItem
             label="Quick Note"
             itemRef={registerItemRef(null)}
+            categoryRowId={categoryId(null)}
             onClick={handleCategorySelect(null)}
           />
           <SystemItem
             label="Research"
             itemRef={registerItemRef(researchCategory)}
+            categoryRowId={categoryId(researchCategory)}
             onClick={handleCategorySelect(researchCategory)}
           />
         </ul>
@@ -270,6 +296,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                   key={goal.id}
                   label={goal.name}
                   itemRef={registerItemRef(goal.id)}
+                  categoryRowId={categoryId(goal.id)}
                   onClick={handleCategorySelect(goal.id)}
                   leading={
                     <button
@@ -294,6 +321,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               key={goal.id}
               label={goal.name}
               itemRef={registerItemRef(goal.id)}
+              categoryRowId={categoryId(goal.id)}
               onClick={handleCategorySelect(goal.id)}
               trailing={
                 canPinMore ? (
@@ -321,13 +349,13 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
 
       <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
         <SettingsButton />
-        <button
+        <ActionButton
           onClick={toggleLeftPanel}
           title="Collapse sidebar"
-          className="rounded-md border border-yellow-500/50 px-2 py-1 transition-colors duration-100 hover:bg-yellow-500/10"
+          className="border-yellow-500/50 hover:bg-yellow-500/10"
         >
           <LuPanelLeftClose className="h-4 w-4 text-yellow-500" />
-        </button>
+        </ActionButton>
       </div>
     </div>
   )
