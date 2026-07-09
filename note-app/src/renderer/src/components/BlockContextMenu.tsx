@@ -10,6 +10,7 @@ export type BlockContextMenuProps = {
   block: BlockMeta
   position: { x: number; y: number }
   onClose: () => void
+  onAiAction: (action: 'translate' | 'explain') => void
 }
 
 // Estimated bounds used to keep the menu on-screen near window edges.
@@ -91,9 +92,9 @@ const showToast = (message: string): void => {
   appearance.onfinish = (): void => toast.remove()
 }
 
-export const BlockContextMenu = ({ block, position, onClose }: BlockContextMenuProps): JSX.Element => {
+export const BlockContextMenu = ({ block, position, onClose, onAiAction }: BlockContextMenuProps): JSX.Element => {
   const menuRef = useRef<HTMLDivElement>(null)
-  const { updateBlockCategories } = useBlockActions()
+  const { updateBlockCategories, classifyBlock } = useBlockActions()
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent): void => {
@@ -127,8 +128,8 @@ export const BlockContextMenu = ({ block, position, onClose }: BlockContextMenuP
         flyLabelToCategoryRow(blockLabel(block.excerpt), position, researchCategory)
       }
     } else {
+      onAiAction(action.id as 'translate' | 'explain')
       // Stubs — no LLM call yet; future work routes these through the assistant.
-      console.info(`Quick action "${action.id}" on block ${block.id}`)
     }
     onClose()
   }
@@ -155,6 +156,9 @@ export const BlockContextMenu = ({ block, position, onClose }: BlockContextMenuP
           {action.label}
         </button>
       ))}
+      {block.categories.includes(null) && (
+        <button type="button" onClick={() => { void classifyBlock(block.id); onClose() }} className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 transition-colors duration-75 hover:bg-yellow-500/10 hover:text-yellow-500">{block.routing ? 'Re-run AI routing' : 'Route with AI'}</button>
+      )}
     </div>,
     document.body
   )

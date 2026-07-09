@@ -8,6 +8,12 @@ export type BlockMeta = {
     // block regardless of how many categories list it.
     categories: (string | null)[]
     excerpt: string
+    routing?: {
+        status: 'pending' | 'applied' | 'overridden'
+        decidedAt: number
+        assignments: { goalId: string | null; confidence: number }[]
+        model: string
+    }
 }
 
 export type NoteContent = {
@@ -32,6 +38,15 @@ export type CaptureMode = 'chat' | 'natural'
 // Whisper). Persisted in settings.json.
 export type DictationMode = 'windows' | 'whisprflow'
 
+export type LlmProvider = 'gemini' | 'openai' | 'anthropic' | 'local'
+
+export type LlmSettings = {
+    provider: LlmProvider
+    model: string
+    localBaseUrl: string
+    polishDictation: boolean
+}
+
 export type AppSettings = {
     blockWindowMinutes: number
     pinnedGoalIds: string[]
@@ -40,5 +55,30 @@ export type AppSettings = {
     // Wispr Flow developer API key (platform.wisprflow.ai). Persisted here
     // but only ever read by the main process when transcribing — it never
     // travels over IPC.
-    whisprflowApiKey: string
+    llm: LlmSettings
+    hasWhisprflowApiKey: boolean
+    hasGeminiApiKey: boolean
+    hasOpenaiApiKey: boolean
+    hasAnthropicApiKey: boolean
+    hasLocalApiToken: boolean
+}
+
+export type LlmCredentialName = 'whisprflow' | 'gemini' | 'openai' | 'anthropic' | 'local'
+
+export type AssistantMessage = {
+    id: string
+    role: 'user' | 'assistant'
+    text: string
+    createdAt: number
+    provider?: LlmProvider
+    model?: string
+    citedBlockIds?: string[]
+}
+
+export type AssistantConversation = {
+    id: string
+    title: string
+    createdAt: number
+    updatedAt: number
+    messages: AssistantMessage[]
 }

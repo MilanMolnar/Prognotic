@@ -27,6 +27,8 @@ export type BlocksActions = {
     createCaptureBlock: (content: string, category: string | null) => Promise<BlockMeta>
     // Multi-goal plumbing: replaces the block's full category list.
     updateBlockCategories: (id: string, categories: (string | null)[]) => Promise<void>
+    applyBlockRouting: (id: string, goalId: string) => Promise<boolean>
+    classifyBlock: (id: string) => Promise<void>
     // Silent delete for blocks left blank — no confirmation dialog; the
     // emptiness check is atomic in the main process.
     cleanupBlockIfEmpty: (id: string) => Promise<void>

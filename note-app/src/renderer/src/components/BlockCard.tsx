@@ -1,14 +1,18 @@
-import { BlockContextMenu } from '@/components'
+import { AiActionDialog, BlockContextMenu } from '@/components'
+import { useAssistantActions, useBlockActions, useGoals } from '@renderer/context'
 import { blockLabel, cn, formatDateFromMs } from '@renderer/utils'
 import { BlockMeta } from '@shared/models'
-import { JSX, MouseEvent, useState } from 'react'
+import { JSX, MouseEvent, useLayoutEffect, useRef, useState } from 'react'
 import { FaRegTrashAlt } from 'react-icons/fa'
+import { flyLabelToCategoryRow } from './categoryFlight'
 
 export type BlockCardProps = {
   block: BlockMeta
   content: string | undefined
   isOpen: boolean
   isMatch?: boolean
+  isRouted?: boolean
+  routeDirection?: 'up' | 'down'
   onSelect: () => void
   onDelete: () => Promise<void>
 }
@@ -18,16 +22,53 @@ export const BlockCard = ({
   content,
   isOpen,
   isMatch = false,
+  isRouted = false,
+  routeDirection = 'down',
   onSelect,
   onDelete
 }: BlockCardProps): JSX.Element => {
   const date = formatDateFromMs(block.createdAt)
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  const [aiResult, setAiResult] = useState<{ action: 'translate' | 'explain'; text: string } | null>(null)
+  const [applyingGoalId, setApplyingGoalId] = useState<string | null>(null)
+  const cardRef = useRef<HTMLFieldSetElement>(null)
+  const wasRoutedRef = useRef(isRouted)
+  const { updateBlockContent, applyBlockRouting } = useBlockActions()
+  const { continueWithText } = useAssistantActions()
+  const { goals } = useGoals()
+
+  const runAiAction = async (action: 'translate' | 'explain'): Promise<void> => {
+    const source = content ?? (await window.context.readBlock(block.id)).content
+    const result = await window.context.runInlineAction(action, source, block.id)
+    if ('text' in result && result.text !== undefined) setAiResult({ action, text: result.text })
+  }
 
   const handleContextMenu = (event: MouseEvent): void => {
     event.preventDefault()
     setMenuPosition({ x: event.clientX, y: event.clientY })
   }
+
+  const applySuggestedGoal = async (goalId: string, goalName: string, event: MouseEvent<HTMLButtonElement>): Promise<void> => {
+    event.stopPropagation()
+    if (applyingGoalId !== null) return
+    setApplyingGoalId(goalId)
+    const applied = await applyBlockRouting(block.id, goalId)
+    setApplyingGoalId(null)
+    if (applied) flyLabelToCategoryRow(goalName, { x: event.clientX, y: event.clientY }, goalId)
+  }
+
+  useLayoutEffect(() => {
+    if (isRouted && !wasRoutedRef.current) {
+      cardRef.current?.animate(
+        [
+          { transform: `translateY(${routeDirection === 'up' ? '20px' : '-20px'})`, opacity: 1 },
+          { transform: 'translateY(0)', opacity: 0.5 }
+        ],
+        { duration: 420, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+      )
+    }
+    wasRoutedRef.current = isRouted
+  }, [isRouted, routeDirection])
 
   return (
     // The context menu is a sibling (not a child) of the card: portal events
@@ -37,8 +78,10 @@ export const BlockCard = ({
     {/* A fieldset so the legend timestamp sits in a real gap of the border
         line — no background masking needed over the translucent theme. */}
     <fieldset
+      ref={cardRef}
       onClick={onSelect}
       onContextMenu={handleContextMenu}
+      style={isRouted && !isOpen ? { opacity: 0.5 } : undefined}
       className={cn(
         'group relative min-w-0 cursor-pointer rounded-md border px-3 pb-2 transition-colors duration-100',
         // While its context menu is open the card shares the menu's darker
@@ -49,6 +92,7 @@ export const BlockCard = ({
           : isMatch
             ? 'border-yellow-500/30'
             : 'border-white/10 hover:border-white/25'
+        , isRouted && !isOpen && 'opacity-50 hover:opacity-70'
       )}
     >
       {/* Full-width legend: short name in the left border gap, date in the
@@ -84,14 +128,22 @@ export const BlockCard = ({
             ))
           : 'Loading...'}
       </div>
+      {block.routing?.status === 'pending' && (
+        <div className="mt-2 flex flex-wrap gap-1">{block.routing.assignments.length > 0 ? block.routing.assignments.filter((assignment): assignment is { goalId: string; confidence: number } => typeof assignment.goalId === 'string').map((assignment) => {
+          const goalName = goals?.find((goal) => goal.id === assignment.goalId)?.name ?? 'Goal'
+          return <button type="button" key={assignment.goalId} disabled={applyingGoalId !== null} onClick={(event) => { void applySuggestedGoal(assignment.goalId, goalName, event) }} className="rounded border border-yellow-500/30 px-1 py-0.5 text-xs text-yellow-500 transition-colors hover:bg-yellow-500/10 disabled:opacity-50">Suggested: {goalName} ({Math.round(assignment.confidence * 100)}%)</button>
+        }) : <span className="text-xs text-zinc-500">AI found no matching goal</span>}</div>
+      )}
     </fieldset>
     {menuPosition && (
       <BlockContextMenu
         block={block}
         position={menuPosition}
         onClose={() => setMenuPosition(null)}
+        onAiAction={(action) => { void runAiAction(action) }}
       />
     )}
+    {aiResult && <AiActionDialog title={aiResult.action === 'translate' ? 'Translation' : 'Explanation'} result={aiResult.text} onClose={() => setAiResult(null)} onReplace={() => { void updateBlockContent(block.id, { content: aiResult.text }); setAiResult(null) }} onContinue={() => { continueWithText(aiResult.text); setAiResult(null) }} />}
     </>
   )
 }

@@ -1,6 +1,7 @@
 import { MDXEditor } from '@mdxeditor/editor'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
 import { useNaturalCapture, UseNaturalCaptureParams } from '@renderer/hooks/useNaturalCapture'
+import { useSettings } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { JSX, useCallback, useState } from 'react'
 import { DictationButton } from './DictationButton'
@@ -16,6 +17,7 @@ export type NaturalCaptureEditorProps = UseNaturalCaptureParams
 // on a separate row below the editor.
 export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Element => {
   const { initialContent, editorRef, handleChange, appendTranscript } = useNaturalCapture(props)
+  const { settings } = useSettings()
   const [isEmpty, setIsEmpty] = useState(() => initialContent.trim().length === 0)
 
   const handleEditorChange = useCallback(
@@ -27,11 +29,13 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
   )
 
   const handleTranscript = useCallback(
-    (text: string): void => {
-      appendTranscript(text)
-      if (text.trim().length > 0) setIsEmpty(false)
+    async (text: string): Promise<void> => {
+      const result = settings.llm.polishDictation ? await window.context.polishTranscript(text) : { text }
+      const next = 'text' in result && result.text ? result.text : text
+      appendTranscript(next)
+      if (next.trim().length > 0) setIsEmpty(false)
     },
-    [appendTranscript]
+    [appendTranscript, settings.llm.polishDictation]
   )
 
   const focusEditor = useCallback((): void => {
@@ -42,7 +46,7 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
   }, [])
 
   const { dictationMode, isListening, interimText, error, notice, isAvailable, toggle } =
-    useDictation({ onFinalTranscript: handleTranscript, focusInput: focusEditor })
+    useDictation({ onFinalTranscript: (text) => { void handleTranscript(text) }, focusInput: focusEditor })
 
   const statusMessage = error ?? notice ?? (isListening && interimText ? interimText : null)
 

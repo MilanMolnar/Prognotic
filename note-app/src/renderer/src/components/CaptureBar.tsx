@@ -1,7 +1,7 @@
 import { DictationButton } from '@renderer/components/DictationButton'
 import { MarkdownFormat, useQuickInput } from '@renderer/hooks/useQuickInput'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
-import { useBlockActions, useBlocks, useGoals } from '@renderer/context'
+import { useBlockActions, useBlocks, useGoals, useSettings } from '@renderer/context'
 import { blockLabel, cn } from '@renderer/utils'
 import { ComponentProps, JSX, useCallback, useEffect } from 'react'
 import { IconType } from 'react-icons'
@@ -25,6 +25,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   const { text, setText, isSubmitting, textareaRef, submit, handleKeyDown, applyFormat, appendTranscript } =
     useQuickInput()
   const { blocks, openBlockId, selectedBlockId } = useBlocks()
+  const { settings } = useSettings()
   const { closeOpenBlock } = useBlockActions()
   const { selectedCategory } = useGoals()
   const isEditingBlock = selectedBlockId !== null
@@ -33,8 +34,14 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
     textareaRef.current?.focus()
   }, [textareaRef])
 
+  const handleTranscript = useCallback(async (text: string): Promise<void> => {
+    if (!settings.llm.polishDictation) { appendTranscript(text); return }
+    const result = await window.context.polishTranscript(text)
+    appendTranscript('text' in result && result.text ? result.text : text)
+  }, [appendTranscript, settings.llm.polishDictation])
+
   const { dictationMode, isListening, interimText, error, notice, isAvailable, toggle, stop } =
-    useDictation({ onFinalTranscript: appendTranscript, focusInput: focusCaptureInput })
+    useDictation({ onFinalTranscript: (text) => { void handleTranscript(text) }, focusInput: focusCaptureInput })
 
   // Stop dictation when the bar becomes inert or the draft is sent.
   useEffect(() => {

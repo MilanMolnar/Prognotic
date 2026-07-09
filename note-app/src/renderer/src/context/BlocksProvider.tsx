@@ -137,6 +137,14 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         setSelectedBlockId((prev) => (prev === id ? null : prev))
     }, [])
 
+    const classifyQuickNote = useCallback(async (id: string) => {
+        const block = blocksRef.current?.find((item) => item.id === id)
+        if (!block?.categories.includes(null)) return
+        const updated = await window.context.classifyBlock(id)
+        if (!updated) return
+        setBlocks((prev) => prev?.map((item) => item.id === updated.id ? updated : item))
+    }, [])
+
     // Close the open block once its idle window elapses. Every write bumps
     // the block's updatedAt, which reschedules this timeout — that *is* the
     // "each write resets the countdown" behavior. Settings changes reschedule
@@ -163,10 +171,11 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
                 expired.categories.includes(selectedCategoryRef.current)
             if (!ownedByNaturalSurface) {
                 void cleanupBlockIfEmpty(openBlockId)
+                void classifyQuickNote(openBlockId)
             }
         }, Math.max(remaining, 0))
         return () => clearTimeout(timer)
-    }, [openBlockId, openBlockUpdatedAt, windowMs, cleanupBlockIfEmpty])
+    }, [openBlockId, openBlockUpdatedAt, windowMs, cleanupBlockIfEmpty, classifyQuickNote])
 
     const selectBlock = useCallback(
         (id: string | null) => {
@@ -283,6 +292,13 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         )
     }, [])
 
+    const applyBlockRouting = useCallback(async (id: string, goalId: string): Promise<boolean> => {
+        const updatedMeta = await window.context.applyBlockRouting(id, goalId)
+        if (!updatedMeta) return false
+        setBlocks((prev) => prev?.map((block) => (block.id === updatedMeta.id ? updatedMeta : block)))
+        return true
+    }, [])
+
     // Manually finalizes the active capture session (distinct from delete):
     // the block simply stops being open and shows as a normal closed card in
     // the feed. A block left blank is removed by the empty cleanup, exactly
@@ -294,7 +310,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
 
         setOpenBlockId(null)
         void cleanupBlockIfEmpty(openId)
-    }, [cleanupBlockIfEmpty])
+        void classifyQuickNote(openId)
+    }, [cleanupBlockIfEmpty, classifyQuickNote])
 
     const deleteBlock = useCallback(async (id: string) => {
         const isDeleted = await window.context.deleteBlock(id)
@@ -323,8 +340,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     )
 
     const actionsValue: BlocksActions = useMemo(
-        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
-        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
+        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, classifyBlock: classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
+        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
     )
 
     return (

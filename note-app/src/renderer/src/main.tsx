@@ -2,7 +2,7 @@ import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BlocksProvider, GoalsProvider, PanelsProvider, SearchProvider, SettingsProvider } from './context'
+import { AssistantProvider, BlocksProvider, GoalsProvider, PanelsProvider, SearchProvider, SettingsProvider } from './context'
 import App from './App'
 
 createRoot(document.getElementById('root')!).render(
@@ -12,7 +12,9 @@ createRoot(document.getElementById('root')!).render(
         <BlocksProvider>
           <SearchProvider>
             <PanelsProvider>
-              <App />
+              <AssistantProvider>
+                <App />
+              </AssistantProvider>
             </PanelsProvider>
           </SearchProvider>
         </BlocksProvider>

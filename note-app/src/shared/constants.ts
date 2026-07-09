@@ -16,5 +16,15 @@ export const defaultSettings: AppSettings = {
     pinnedGoalIds: [],
     captureMode: "chat",
     dictationMode: "windows",
-    whisprflowApiKey: "",
+    llm: {
+        provider: 'gemini',
+        model: '',
+        localBaseUrl: 'http://127.0.0.1:1234',
+        polishDictation: false,
+    },
+    hasWhisprflowApiKey: false,
+    hasGeminiApiKey: false,
+    hasOpenaiApiKey: false,
+    hasAnthropicApiKey: false,
+    hasLocalApiToken: false,
 }

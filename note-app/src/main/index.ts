@@ -2,10 +2,13 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, BrowserWindowConstructorOptions, ipcMain, session, shell, systemPreferences } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
-import { appendToBlock, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, getBlocks, getGoals, getSettings, readBlock, setSettings, updateBlockCategories, writeBlock } from './lib'
+import { appendToBlock, applyBlockRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setSettings, updateBlockCategories, writeBlock } from './lib'
 import { toggleWindowsDictation } from './dictation/windows'
 import { transcribeAudio } from './dictation/wisprflow'
-import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
+import { AppendToBlock, ApplyBlockRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
+import { classifyBlock, listModels, polishTranscript, runInlineAction, streamAssistant, testConnection } from './llm/router'
+
+const assistantStreams = new Map<string, AbortController>()
 
 const platformWindowOptions = (): BrowserWindowConstructorOptions => {
   if (process.platform === 'darwin') {
@@ -42,8 +45,8 @@ const platformWindowOptions = (): BrowserWindowConstructorOptions => {
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1170,
+    height: 870,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -105,15 +108,42 @@ app.whenReady().then(async () => {
   ipcMain.handle('writeBlock', (_, ...args: Parameters<WriteBlock>) => writeBlock(...args))
   ipcMain.handle('createBlock', (_, ...args: Parameters<CreateBlock>) => createBlock(...args))
   ipcMain.handle('updateBlockCategories', (_, ...args: Parameters<UpdateBlockCategories>) => updateBlockCategories(...args))
+  ipcMain.handle('applyBlockRouting', (_, ...args: Parameters<ApplyBlockRouting>) => applyBlockRouting(...args))
   ipcMain.handle('appendToBlock', (_, ...args: Parameters<AppendToBlock>) => appendToBlock(...args))
   ipcMain.handle('deleteBlock', (_, ...args: Parameters<DeleteBlock>) => deleteBlock(...args))
   ipcMain.handle('deleteBlockIfEmpty', (_, ...args: Parameters<DeleteBlockIfEmpty>) => deleteBlockIfEmpty(...args))
   ipcMain.handle('getSettings', (_, ...args: Parameters<GetSettings>) => getSettings(...args))
   ipcMain.handle('setSettings', (_, ...args: Parameters<SetSettings>) => setSettings(...args))
+  ipcMain.handle('setCredential', (_, ...args: Parameters<SetCredential>) => setCredential(...args))
+  ipcMain.handle('clearCredential', (_, name: Parameters<ClearCredential>[0]) => setCredential(name, ''))
   ipcMain.handle('getGoals', (_, ...args: Parameters<GetGoals>) => getGoals(...args))
   ipcMain.handle('createGoal', (_, ...args: Parameters<CreateGoal>) => createGoal(...args))
+  ipcMain.handle('renameGoal', (_, ...args: Parameters<RenameGoal>) => renameGoal(...args))
+  ipcMain.handle('deleteGoal', (_, ...args: Parameters<DeleteGoal>) => deleteGoal(...args))
   ipcMain.handle('transcribeAudio', (_, ...args: Parameters<TranscribeAudio>) => transcribeAudio(...args))
   ipcMain.handle('toggleWindowsDictation', (event) => toggleWindowsDictation(event.sender))
+  ipcMain.handle('getLlmModels', async (_, ...args: Parameters<GetLlmModels>) => {
+    try { return { models: await listModels(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'Could not load models.' } }
+  })
+  ipcMain.handle('testLlmConnection', async (): Promise<Awaited<ReturnType<TestLlmConnection>>> => {
+    try { await testConnection(); return { ok: true } } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Connection test failed.' } }
+  })
+  ipcMain.handle('startAssistantStream', async (event, requestId: Parameters<StartAssistantStream>[0], message: Parameters<StartAssistantStream>[1], history: Parameters<StartAssistantStream>[2], scope: Parameters<StartAssistantStream>[3]) => {
+    if (assistantStreams.has(requestId)) return { ok: false, error: 'An assistant request with this id is already running.' }
+    const controller = new AbortController()
+    assistantStreams.set(requestId, controller)
+    void streamAssistant(message, history, scope, { signal: controller.signal, onToken: (text) => event.sender.send('assistantStreamEvent', { requestId, type: 'token', text }) })
+      .then((citedBlockIds) => event.sender.send('assistantStreamEvent', { requestId, type: 'done', citedBlockIds }))
+      .catch((error) => { if (!controller.signal.aborted) event.sender.send('assistantStreamEvent', { requestId, type: 'error', message: error instanceof Error ? error.message : 'Assistant request failed.' }) })
+      .finally(() => assistantStreams.delete(requestId))
+    return { ok: true }
+  })
+  ipcMain.handle('cancelAssistantStream', (_, ...args: Parameters<CancelAssistantStream>) => { assistantStreams.get(args[0])?.abort(); assistantStreams.delete(args[0]) })
+  ipcMain.handle('classifyBlock', async (_, ...args: Parameters<ClassifyBlock>) => { try { return await classifyBlock(...args) } catch { return null } })
+  ipcMain.handle('runInlineAction', async (_, ...args: Parameters<RunInlineAction>) => { try { return { text: await runInlineAction(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'AI action failed.' } } })
+  ipcMain.handle('polishTranscript', async (_, ...args: Parameters<PolishTranscript>) => { try { return { text: await polishTranscript(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'Transcript cleanup failed.' } } })
+  ipcMain.handle('getAssistantConversations', (_, ...args: Parameters<GetAssistantConversations>) => getAssistantConversations(...args))
+  ipcMain.handle('saveAssistantConversations', (_, ...args: Parameters<SaveAssistantConversations>) => saveAssistantConversations(...args))
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

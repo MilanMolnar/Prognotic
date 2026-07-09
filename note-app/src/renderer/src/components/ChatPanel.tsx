@@ -1,171 +1,54 @@
 import { ActionButton } from '@/components'
-import { usePanelActions, usePanels } from '@renderer/context'
-import { cn } from '@renderer/utils'
-import { FormEvent, JSX, MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from 'react'
-import { LuPanelRightClose, LuPanelRightOpen, LuSend, LuSparkles } from 'react-icons/lu'
+import { useAssistant, useAssistantActions, useBlockActions, useBlocks, useGoals, usePanelActions, usePanels } from '@renderer/context'
+import { blockLabel, cn } from '@renderer/utils'
+import { FormEvent, JSX, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { LuCircleStop, LuPanelRightClose, LuPanelRightOpen, LuPlus, LuSend, LuSparkles } from 'react-icons/lu'
 
-type ChatMessage = {
-  id: number
-  role: 'user' | 'assistant'
-  text: string
-}
-
-// Placeholder reply until the assistant is wired to an AI backend that can
-// query the note database.
-const placeholderReply =
-  "I can't look through your notes just yet — AI answers are coming soon. Your question is noted!"
-
-// Shell of the AI assistant (roadmap: right-sidebar conversational
-// assistant). UI only: local message list, input, canned placeholder reply.
-// The left edge is a drag handle for resizing; the collapse control sits at
-// the bottom, mirroring the goals sidebar.
 export const ChatPanel = (): JSX.Element => {
   const { isRightPanelOpen, rightPanelWidth } = usePanels()
   const { toggleRightPanel, setRightPanelWidth } = usePanelActions()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [draft, setDraft] = useState('')
+  const { conversations, activeConversationId, isStreaming, error, scopeGoalId, scopeDateRange, draft } = useAssistant()
+  const { sendMessage, cancel, newConversation, selectConversation, setScopeGoalId, setScopeDateRange, setDraft } = useAssistantActions()
+  const { selectedCategory } = useGoals()
+  const { blocks } = useBlocks()
+  const { selectBlock } = useBlockActions()
   const [isResizing, setIsResizing] = useState(false)
-
   const listRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
-  }, [messages.length])
+  const active = useMemo(() => conversations.find((item) => item.id === activeConversationId) ?? null, [conversations, activeConversationId])
+  const activeMessageCount = active?.messages.length
+  const activeLastMessageText = active?.messages[activeMessageCount ? activeMessageCount - 1 : 0]?.text
 
-  const handleResizeStart = (event: ReactMouseEvent): void => {
-    event.preventDefault()
-    setIsResizing(true)
-  }
-
-  // While a drag is active, track the pointer globally; the panel hugs the
-  // right window edge, so its width is the distance from cursor to that edge.
+  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight }) }, [activeMessageCount, activeLastMessageText])
   useEffect(() => {
     if (!isResizing) return
-
-    const handleMouseMove = (event: MouseEvent): void => {
-      setRightPanelWidth(window.innerWidth - event.clientX)
-    }
-    const handleMouseUp = (): void => {
-      setIsResizing(false)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-    document.body.style.cursor = 'col-resize'
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-    }
+    const move = (event: MouseEvent): void => setRightPanelWidth(window.innerWidth - event.clientX)
+    const up = (): void => setIsResizing(false)
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); document.body.style.cursor = 'col-resize'
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = '' }
   }, [isResizing, setRightPanelWidth])
 
-  const handleSend = (event: FormEvent): void => {
+  const submit = (event: FormEvent): void => {
     event.preventDefault()
-    const trimmed = draft.trim()
-    if (!trimmed) return
-
-    setMessages((prev) => [
-      ...prev,
-      { id: prev.length + 1, role: 'user', text: trimmed },
-      { id: prev.length + 2, role: 'assistant', text: placeholderReply }
-    ])
+    const message = draft.trim()
+    if (!message) return
     setDraft('')
+    void sendMessage(message)
   }
+  const labelFor = (id: string): string => blockLabel(blocks?.find((block) => block.id === id)?.excerpt ?? 'note')
 
-  return (
-    <aside
-      className={cn(
-        'relative mt-10 shrink-0 border-l border-l-white/10 p-2 flex flex-col',
-        !isResizing && 'transition-[width] duration-200'
-      )}
-      style={{ width: isRightPanelOpen ? rightPanelWidth : 48 }}
-    >
-      {isRightPanelOpen && (
-        <div
-          onMouseDown={handleResizeStart}
-          title="Drag to resize"
-          className={cn(
-            'absolute left-0 top-0 z-10 h-full w-1.5 -translate-x-1/2 cursor-col-resize transition-colors duration-100 hover:bg-zinc-400/40',
-            isResizing && 'bg-zinc-400/40'
-          )}
-        />
-      )}
-      {isRightPanelOpen ? (
-        <>
-          <div className="flex items-center px-1">
-            <span className="flex items-center gap-1.5 text-sm font-bold text-zinc-300">
-              <LuSparkles className="w-4 h-4 text-yellow-500/70" />
-              Assistant
-            </span>
-          </div>
-
-          <div ref={listRef} className="flex-1 overflow-y-auto mt-2 px-1">
-            {messages.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center px-3">
-                <LuSparkles className="w-8 h-8 text-zinc-600" />
-                <p className="text-sm text-zinc-400">Ask about your notes</p>
-                <p className="text-xs text-zinc-600">
-                  Soon you&apos;ll be able to ask things like &quot;Summarize my Work notes from
-                  this week.&quot;
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'max-w-[85%] rounded-lg px-2.5 py-1.5 text-sm whitespace-pre-wrap',
-                      message.role === 'user'
-                        ? 'self-end bg-zinc-700/50'
-                        : 'self-start border border-white/10 text-zinc-300'
-                    )}
-                  >
-                    {message.text}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <form
-            onSubmit={handleSend}
-            className="mt-2 flex items-center gap-1 rounded-lg border border-zinc-400/50 bg-zinc-900/40 px-1 py-1 transition-colors duration-100 focus-within:border-zinc-300/60"
-          >
-            <input
-              type="text"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask about your notes..."
-              className="flex-1 min-w-0 bg-transparent px-2 py-1 text-sm outline-none caret-yellow-500 placeholder:text-zinc-500"
-            />
-            <button
-              type="submit"
-              title="Send"
-              disabled={draft.trim().length === 0}
-              className="rounded p-1.5 text-zinc-300 hover:bg-zinc-600/50 transition-colors duration-100 disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              <LuSend className="w-4 h-4" />
-            </button>
-          </form>
-
-          <div className="mt-2 border-t border-white/10 pt-2">
-            <ActionButton
-              onClick={toggleRightPanel}
-              title="Collapse assistant"
-              className="border-yellow-500/50 hover:bg-yellow-500/10"
-            >
-              <LuPanelRightClose className="h-4 w-4 text-yellow-500" />
-            </ActionButton>
-          </div>
-        </>
-      ) : (
-        <div className="flex h-full flex-col items-center justify-end gap-3 pb-1">
-          <LuSparkles className="w-4 h-4 text-zinc-600" />
-          <ActionButton onClick={toggleRightPanel} title="Open assistant">
-            <LuPanelRightOpen className="h-4 w-4 text-zinc-300" />
-          </ActionButton>
-        </div>
-      )}
-    </aside>
-  )
+  return <aside className={cn('relative mt-10 shrink-0 border-l border-l-white/10 p-2 flex flex-col', !isResizing && 'transition-[width] duration-200')} style={{ width: isRightPanelOpen ? rightPanelWidth : 48 }}>
+    {isRightPanelOpen && <div onMouseDown={(event: ReactMouseEvent) => { event.preventDefault(); setIsResizing(true) }} title="Drag to resize" className={cn('absolute left-0 top-0 z-10 h-full w-1.5 -translate-x-1/2 cursor-col-resize hover:bg-zinc-400/40', isResizing && 'bg-zinc-400/40')} />}
+    {isRightPanelOpen ? <>
+      <div className="flex items-center gap-1 px-1"><span className="flex flex-1 items-center gap-1.5 text-sm font-bold text-zinc-300"><LuSparkles className="h-4 w-4 text-yellow-500/70" />Assistant</span><button type="button" title="New conversation" onClick={newConversation} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"><LuPlus className="h-4 w-4" /></button></div>
+      {conversations.length > 0 && <select value={activeConversationId ?? ''} onChange={(event) => selectConversation(event.target.value)} className="mt-2 w-full rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-300"><option value="">New conversation</option>{conversations.map((conversation) => <option key={conversation.id} value={conversation.id}>{conversation.title}</option>)}</select>}
+      <div className="mt-2 flex flex-wrap gap-1"><button type="button" onClick={() => setScopeGoalId(undefined)} className={cn('rounded px-1.5 py-0.5 text-xs', scopeGoalId === undefined ? 'bg-yellow-500/15 text-yellow-500' : 'text-zinc-500 hover:bg-zinc-700')}>All notes</button><button type="button" onClick={() => setScopeGoalId(selectedCategory)} className={cn('rounded px-1.5 py-0.5 text-xs', scopeGoalId === selectedCategory ? 'bg-yellow-500/15 text-yellow-500' : 'text-zinc-500 hover:bg-zinc-700')}>Current goal</button><button type="button" onClick={() => setScopeDateRange(scopeDateRange === 'week' ? 'all' : 'week')} className={cn('rounded px-1.5 py-0.5 text-xs', scopeDateRange === 'week' ? 'bg-yellow-500/15 text-yellow-500' : 'text-zinc-500 hover:bg-zinc-700')}>This week</button></div>
+      <div ref={listRef} className="mt-2 flex-1 overflow-y-auto px-1">{!active || active.messages.length === 0 ? <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center"><LuSparkles className="h-8 w-8 text-zinc-600" /><p className="text-sm text-zinc-400">Ask about your notes</p></div> : <div className="flex flex-col gap-2">{active.messages.map((message) => <div key={message.id} className={cn('max-w-[92%] rounded-lg px-2.5 py-1.5 text-sm whitespace-pre-wrap', message.role === 'user' ? 'self-end bg-zinc-700/50' : 'self-start border border-white/10 text-zinc-300')}>
+        {message.text || (isStreaming ? <span className="text-zinc-500">Thinking...</span> : '')}
+        {message.citedBlockIds && message.citedBlockIds.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{message.citedBlockIds.map((id) => <button type="button" key={id} onClick={() => selectBlock(id)} title="Open cited note" className="rounded border border-yellow-500/30 px-1 py-0.5 text-xs text-yellow-500 hover:bg-yellow-500/10">{labelFor(id)}</button>)}</div>}
+      </div>)}</div>}</div>
+      {error && <p className="mt-1 px-1 text-xs text-red-400" role="alert">{error}</p>}
+      <form onSubmit={submit} className="mt-2 flex items-center gap-1 rounded-lg border border-zinc-400/50 bg-zinc-900/40 px-1 py-1 focus-within:border-zinc-300/60"><input type="text" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about your notes..." className="min-w-0 flex-1 bg-transparent px-2 py-1 text-sm outline-none caret-yellow-500 placeholder:text-zinc-500" />{isStreaming ? <button type="button" title="Stop" onClick={cancel} className="rounded p-1.5 text-yellow-500 hover:bg-zinc-700"><LuCircleStop className="h-4 w-4" /></button> : <button type="submit" title="Send" disabled={!draft.trim()} className="rounded p-1.5 text-zinc-300 hover:bg-zinc-600/50 disabled:opacity-40"><LuSend className="h-4 w-4" /></button>}</form>
+      <div className="mt-2 border-t border-white/10 pt-2"><ActionButton onClick={toggleRightPanel} title="Collapse assistant" className="border-yellow-500/50 hover:bg-yellow-500/10"><LuPanelRightClose className="h-4 w-4 text-yellow-500" /></ActionButton></div>
+    </> : <div className="flex h-full flex-col items-center justify-end gap-3 pb-1"><LuSparkles className="h-4 w-4 text-zinc-600" /><ActionButton onClick={toggleRightPanel} title="Open assistant"><LuPanelRightOpen className="h-4 w-4 text-zinc-300" /></ActionButton></div>}
+  </aside>
 }

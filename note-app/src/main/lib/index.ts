@@ -1,8 +1,8 @@
 import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, maxPinnedGoals, settingsFileName } from "@shared/constants"
-import { AppSettings, BlockMeta, Goal } from "@shared/models"
-import { AppendToBlock, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, GetBlocks, GetGoals, GetSettings, ReadBlock, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
+import { AppSettings, AssistantConversation, BlockMeta, Goal, LlmCredentialName } from "@shared/models"
+import { AppendToBlock, ApplyBlockRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
-import { dialog } from "electron"
+import { dialog, safeStorage } from "electron"
 import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "fs-extra"
 import { homedir } from "os"
 import welcomeNoteFile from '../../../resources/welcome-note.md?asset'
@@ -21,6 +21,8 @@ const getIndexPath = (): string => `${getRootDir()}${separator()}${indexFileName
 const getSettingsPath = (): string => `${getRootDir()}${separator()}${settingsFileName}`
 const getGoalsPath = (): string => `${getRootDir()}${separator()}${goalsFileName}`
 const getBlockPath = (file: string): string => `${getRootDir()}${separator()}${file}`
+const getSecretsPath = (): string => `${getRootDir()}${separator()}secrets.json`
+const getAssistantHistoryPath = (): string => `${getRootDir()}${separator()}assistant-history.json`
 
 type BlockIndex = {
     version: number
@@ -241,6 +243,31 @@ export const updateBlockCategories: UpdateBlockCategories = async (id, categorie
     })
 }
 
+export const setBlockRouting = async (id: string, routing: NonNullable<BlockMeta['routing']>): Promise<BlockMeta | null> => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return null
+        meta.routing = routing
+        await writeJsonAtomic(getIndexPath(), index)
+        return meta
+    })
+}
+
+export const applyBlockRouting: ApplyBlockRouting = async (id, goalId) => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta?.routing || meta.routing.status !== 'pending') return null
+        const assignment = meta.routing.assignments.find((item) => item.goalId === goalId)
+        if (!assignment) return null
+        meta.categories = normalizeCategories([...meta.categories, goalId])
+        meta.routing = { ...meta.routing, status: 'applied', assignments: [assignment] }
+        await writeJsonAtomic(getIndexPath(), index)
+        return meta
+    })
+}
+
 export const appendToBlock: AppendToBlock = async (id, text) => {
     return withIndexLock(async () => {
         const { index } = await loadIndex()
@@ -372,8 +399,41 @@ export const createGoal: CreateGoal = async (name, description) => {
     })
 }
 
-const clampSettings = (settings: AppSettings): AppSettings => ({
-    blockWindowMinutes: Number.isFinite(settings.blockWindowMinutes)
+export const renameGoal: RenameGoal = async (id, name, description) => {
+    return withIndexLock(async () => {
+        const goalsFile = await loadGoalsFile()
+        const goal = goalsFile.goals[id]
+        if (!goal) return null
+        goal.name = name.trim()
+        goal.description = description.trim()
+        await writeJsonAtomic(getGoalsPath(), goalsFile)
+        return goal
+    })
+}
+
+export const deleteGoal: DeleteGoal = async (id) => {
+    return withIndexLock(async () => {
+        const goalsFile = await loadGoalsFile()
+        if (!goalsFile.goals[id]) return false
+        delete goalsFile.goals[id]
+
+        const { index } = await loadIndex()
+        for (const block of Object.values(index.blocks)) {
+            if (block.categories.includes(id)) {
+                block.categories = normalizeCategories(block.categories.filter((category) => category !== id))
+            }
+        }
+
+        await Promise.all([
+            writeJsonAtomic(getGoalsPath(), goalsFile),
+            writeJsonAtomic(getIndexPath(), index)
+        ])
+        return true
+    })
+}
+
+const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
+    blockWindowMinutes: typeof settings.blockWindowMinutes === 'number' && Number.isFinite(settings.blockWindowMinutes)
         ? Math.max(1, Math.round(settings.blockWindowMinutes))
         : defaultSettings.blockWindowMinutes,
     pinnedGoalIds: Array.isArray(settings.pinnedGoalIds)
@@ -385,26 +445,128 @@ const clampSettings = (settings: AppSettings): AppSettings => ({
         if (raw === 'online' || raw === 'browser-only' || raw === 'local') return 'windows'
         return raw === 'windows' || raw === 'whisprflow' ? raw : defaultSettings.dictationMode
     })(),
-    whisprflowApiKey: typeof settings.whisprflowApiKey === 'string'
-        ? settings.whisprflowApiKey
-        : defaultSettings.whisprflowApiKey,
+    llm: {
+        provider: settings.llm?.provider === 'openai' || settings.llm?.provider === 'anthropic' || settings.llm?.provider === 'local'
+            ? settings.llm.provider
+            : 'gemini',
+        model: typeof settings.llm?.model === 'string' ? settings.llm.model.trim() : '',
+        localBaseUrl: typeof settings.llm?.localBaseUrl === 'string' && /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\/?$/.test(settings.llm.localBaseUrl.trim())
+            ? settings.llm.localBaseUrl.trim().replace(/\/$/, '')
+            : defaultSettings.llm.localBaseUrl,
+        polishDictation: settings.llm?.polishDictation === true,
+    },
+    hasWhisprflowApiKey: false,
+    hasGeminiApiKey: false,
+    hasOpenaiApiKey: false,
+    hasAnthropicApiKey: false,
+    hasLocalApiToken: false,
 })
 
-export const getSettings: GetSettings = async () => {
+type SecretFile = { version: 1; values: Partial<Record<LlmCredentialName, string>> }
+
+const loadSecretFile = async (): Promise<SecretFile> => {
     try {
-        const raw = await readFile(getSettingsPath(), { encoding: fileEncoding })
-        return clampSettings({ ...defaultSettings, ...JSON.parse(raw) })
+        const parsed = JSON.parse(await readFile(getSecretsPath(), { encoding: fileEncoding })) as SecretFile
+        if (parsed && parsed.version === 1 && parsed.values && typeof parsed.values === 'object') return parsed
     } catch {
-        return defaultSettings
+        // Secrets are created on first credential save.
     }
+    return { version: 1, values: {} }
+}
+
+const ensureEncryptedStorage = (): void => {
+    if (!safeStorage.isEncryptionAvailable()) {
+        throw new Error('Encrypted credential storage is unavailable on this system.')
+    }
+    if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') {
+        throw new Error('A secure OS credential store is required to save API keys.')
+    }
+}
+
+export const getCredential = async (name: LlmCredentialName): Promise<string> => {
+    const stored = (await loadSecretFile()).values[name]
+    if (!stored) return ''
+    try {
+        ensureEncryptedStorage()
+        return safeStorage.decryptString(Buffer.from(stored, 'base64'))
+    } catch {
+        return ''
+    }
+}
+
+type CredentialFlag = keyof Pick<AppSettings, 'hasWhisprflowApiKey' | 'hasGeminiApiKey' | 'hasOpenaiApiKey' | 'hasAnthropicApiKey' | 'hasLocalApiToken'>
+
+const credentialFlags: Record<LlmCredentialName, CredentialFlag> = {
+    whisprflow: 'hasWhisprflowApiKey',
+    gemini: 'hasGeminiApiKey',
+    openai: 'hasOpenaiApiKey',
+    anthropic: 'hasAnthropicApiKey',
+    local: 'hasLocalApiToken',
+}
+
+const credentialFlag = (name: LlmCredentialName): CredentialFlag => credentialFlags[name]
+
+export const setCredential = async (name: LlmCredentialName, value: string): Promise<AppSettings> => {
+    await ensureDir(getRootDir())
+    ensureEncryptedStorage()
+    const secrets = await loadSecretFile()
+    const trimmed = value.trim()
+    if (trimmed) secrets.values[name] = safeStorage.encryptString(trimmed).toString('base64')
+    else delete secrets.values[name]
+    await writeJsonAtomic(getSecretsPath(), secrets)
+    return getSettings()
+}
+
+const publicSettings = async (settings: AppSettings): Promise<AppSettings> => {
+    const next = { ...settings }
+    for (const name of ['whisprflow', 'gemini', 'openai', 'anthropic', 'local'] as const) {
+        next[credentialFlag(name)] = (await getCredential(name)).length > 0
+    }
+    return next
+}
+
+export const getSettings: GetSettings = async () => {
+    let raw: Record<string, unknown> = {}
+    try {
+        raw = JSON.parse(await readFile(getSettingsPath(), { encoding: fileEncoding })) as Record<string, unknown>
+    } catch {
+        // Default settings are returned below.
+    }
+
+    // Migrate the legacy plaintext Wispr Flow key once, then never return it
+    // over IPC again.
+    if (typeof raw.whisprflowApiKey === 'string' && raw.whisprflowApiKey.trim() && !(await getCredential('whisprflow'))) {
+        try {
+            await setCredential('whisprflow', raw.whisprflowApiKey)
+            delete raw.whisprflowApiKey
+            await writeJsonAtomic(getSettingsPath(), raw)
+        } catch {
+            // The UI will surface encrypted-storage availability on the next save.
+        }
+    }
+    return publicSettings(clampSettings({ ...defaultSettings, ...raw }))
 }
 
 export const setSettings: SetSettings = async (patch) => {
     const rootDir = getRootDir()
     await ensureDir(rootDir)
 
-    const merged = clampSettings({ ...(await getSettings()), ...patch })
+    const current = await getSettings()
+    const merged = clampSettings({ ...current, ...patch, llm: { ...current.llm, ...patch.llm } })
     await writeJsonAtomic(getSettingsPath(), merged)
+    return publicSettings(merged)
+}
 
-    return merged
+export const getAssistantConversations: GetAssistantConversations = async () => {
+    try {
+        const parsed = JSON.parse(await readFile(getAssistantHistoryPath(), { encoding: fileEncoding })) as { conversations?: AssistantConversation[] }
+        return Array.isArray(parsed.conversations) ? parsed.conversations.slice(0, 25) : []
+    } catch {
+        return []
+    }
+}
+
+export const saveAssistantConversations: SaveAssistantConversations = async (conversations) => {
+    await ensureDir(getRootDir())
+    await writeJsonAtomic(getAssistantHistoryPath(), { conversations: conversations.slice(0, 25) })
 }

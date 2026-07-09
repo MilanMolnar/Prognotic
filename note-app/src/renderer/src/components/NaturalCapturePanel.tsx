@@ -2,7 +2,7 @@ import { BlockCard, NaturalCaptureEditor } from '@/components'
 import { useGoals } from '@renderer/context'
 import { useBlockFeed } from '@renderer/hooks/useBlockFeed'
 import { cn } from '@renderer/utils'
-import { ComponentProps, JSX, useEffect, useRef } from 'react'
+import { ComponentProps, JSX, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 
 export type NaturalCapturePanelProps = ComponentProps<'div'>
 
@@ -28,19 +28,66 @@ export const NaturalCapturePanel = ({
   // Writing happens at the top — keep it in view on category change, and
   // surface the best match when searching.
   const scrollRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<Map<string, HTMLLIElement>>(new Map())
+  const previousRectsRef = useRef<Map<string, DOMRect>>(new Map())
+  const previousRoutingRef = useRef<Map<string, 'pending' | 'applied' | 'overridden' | undefined>>(new Map())
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [selectedCategory, isSearching])
-
-  if (!feedBlocks) return null
 
   // The open block of this category is resumed by the writing surface, so
   // it is excluded from the cards; wait for its markdown before mounting
   // the editor. A pulsing dot marks an active session.
   const openTarget =
-    openBlockId !== null ? feedBlocks.find((block) => block.id === openBlockId) : undefined
+    openBlockId !== null ? feedBlocks?.find((block) => block.id === openBlockId) : undefined
   const resumeContent = openTarget ? blockContents[openTarget.id] : ''
-  const closedBlocks = feedBlocks.filter((block) => block.id !== openBlockId)
+  const closedBlocks = useMemo(() => [...(feedBlocks ?? [])]
+    .filter((block) => block.id !== openBlockId)
+    .sort((a, b) => {
+      if (selectedCategory === null) {
+        const aRouted = a.routing?.status === 'applied'
+        const bRouted = b.routing?.status === 'applied'
+        if (aRouted !== bRouted) return aRouted ? 1 : -1
+        if (aRouted && bRouted) {
+          return (a.routing?.decidedAt ?? 0) - (b.routing?.decidedAt ?? 0)
+        }
+      }
+      return 0
+    }), [feedBlocks, openBlockId, selectedCategory])
+
+  const registerItemRef = useCallback((id: string) => (element: HTMLLIElement | null): void => {
+    if (element) itemRefs.current.set(id, element)
+    else itemRefs.current.delete(id)
+  }, [])
+
+  useLayoutEffect(() => {
+    const currentRects = new Map<string, DOMRect>()
+    const currentRouting = new Map<string, 'pending' | 'applied' | 'overridden' | undefined>()
+    for (const block of closedBlocks) {
+      const element = itemRefs.current.get(block.id)
+      if (!element) continue
+      const current = element.getBoundingClientRect()
+      const previous = previousRectsRef.current.get(block.id)
+      const becameRouted = previousRoutingRef.current.has(block.id) && previousRoutingRef.current.get(block.id) !== 'applied' && block.routing?.status === 'applied'
+      if (selectedCategory === null && becameRouted) {
+        const deltaY = previous ? previous.top - current.top : 0
+        const startY = previous && Math.abs(deltaY) > 1 ? deltaY : -20
+        element.animate(
+          [
+            { transform: `translateY(${startY}px)`, opacity: 1 },
+            { transform: 'translateY(0)', opacity: 0.5 }
+          ],
+          { duration: 420, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+        )
+      }
+      currentRects.set(block.id, current)
+      currentRouting.set(block.id, block.routing?.status)
+    }
+    previousRectsRef.current = currentRects
+    previousRoutingRef.current = currentRouting
+  }, [closedBlocks, selectedCategory])
+
+  if (!feedBlocks) return null
 
   return (
     <div ref={scrollRef} className={cn('overflow-y-auto', className)} {...props}>
@@ -65,12 +112,14 @@ export const NaturalCapturePanel = ({
       {closedBlocks.length > 0 && (
         <ul className="mt-4 space-y-3">
           {closedBlocks.map((block) => (
-            <li key={block.id}>
+            <li key={block.id} ref={registerItemRef(block.id)}>
               <BlockCard
                 block={block}
                 content={blockContents[block.id]}
                 isOpen={false}
                 isMatch={matchIds.has(block.id)}
+                isRouted={selectedCategory === null && block.routing?.status === 'applied'}
+                routeDirection="down"
                 onSelect={handleBlockSelect(block.id)}
                 onDelete={handleBlockDelete(block.id)}
               />

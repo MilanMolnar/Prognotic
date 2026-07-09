@@ -1,4 +1,4 @@
-import { ActionButton, NewGoalButton, SettingsButton } from '@/components'
+import { ActionButton, GoalContextMenu, GoalDialog, NewGoalButton, SettingsButton } from '@/components'
 import {
   CategoryKey,
   useBlockActions,
@@ -42,6 +42,7 @@ type SelectableItemProps = {
   categoryRowId: string
   leading?: ReactNode
   trailing?: ReactNode
+  onContextMenu?: (event: MouseEvent) => void
 }
 
 const SelectableItem = ({
@@ -50,12 +51,14 @@ const SelectableItem = ({
   itemRef,
   categoryRowId,
   leading,
-  trailing
+  trailing,
+  onContextMenu
 }: SelectableItemProps): JSX.Element => (
   <li
     ref={itemRef}
     data-category-row={categoryRowId}
     onClick={onClick}
+    onContextMenu={onContextMenu}
     className={cn(
       goalRowClass,
       'relative z-10 cursor-pointer gap-2 hover:bg-zinc-600/50'
@@ -84,7 +87,7 @@ const SectionLabel = ({ children }: { children: string }): JSX.Element => (
 
 export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>): JSX.Element => {
   const { goals, selectedCategory } = useGoals()
-  const { selectCategory } = useGoalActions()
+  const { selectCategory, deleteGoal } = useGoalActions()
   const { selectBlock } = useBlockActions()
   const { closeSearch } = useSearchActions()
   const { toggleLeftPanel } = usePanelActions()
@@ -93,6 +96,8 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const { togglePinGoal } = useSettingsActions()
   const [search, setSearch] = useState('')
   const [isGoalSearchOpen, setIsGoalSearchOpen] = useState(false)
+  const [contextGoal, setContextGoal] = useState<{ goal: Goal; position: { x: number; y: number } } | null>(null)
+  const [editingGoal, setEditingGoal] = useState<{ goal: Goal; mode: 'rename' | 'description' } | null>(null)
 
   const listContainerRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -215,6 +220,19 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     void togglePinGoal(goalId)
   }
 
+  const handleGoalContextMenu = (goal: Goal) => (event: MouseEvent): void => {
+    event.preventDefault()
+    setContextGoal({ goal, position: { x: event.clientX, y: event.clientY } })
+  }
+
+  const handleDeleteGoal = async (): Promise<void> => {
+    if (!contextGoal) return
+    const { goal } = contextGoal
+    setContextGoal(null)
+    if (!window.confirm(`Delete the goal "${goal.name}"? Its notes will remain in Quick Notes.`)) return
+    await deleteGoal(goal.id)
+  }
+
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Escape') closeGoalSearch()
   }
@@ -298,6 +316,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                   itemRef={registerItemRef(goal.id)}
                   categoryRowId={categoryId(goal.id)}
                   onClick={handleCategorySelect(goal.id)}
+                  onContextMenu={handleGoalContextMenu(goal)}
                   leading={
                     <button
                       type="button"
@@ -323,6 +342,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               itemRef={registerItemRef(goal.id)}
               categoryRowId={categoryId(goal.id)}
               onClick={handleCategorySelect(goal.id)}
+              onContextMenu={handleGoalContextMenu(goal)}
               trailing={
                 canPinMore ? (
                   <button
@@ -357,6 +377,8 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
           <LuPanelLeftClose className="h-4 w-4 text-yellow-500" />
         </ActionButton>
       </div>
+      {contextGoal && <GoalContextMenu goal={contextGoal.goal} position={contextGoal.position} onClose={() => setContextGoal(null)} onRename={() => { setEditingGoal({ goal: contextGoal.goal, mode: 'rename' }); setContextGoal(null) }} onEditDescription={() => { setEditingGoal({ goal: contextGoal.goal, mode: 'description' }); setContextGoal(null) }} onDelete={() => { void handleDeleteGoal() }} />}
+      {editingGoal && <GoalDialog goal={editingGoal.goal} mode={editingGoal.mode} onClose={() => setEditingGoal(null)} />}
     </div>
   )
 }

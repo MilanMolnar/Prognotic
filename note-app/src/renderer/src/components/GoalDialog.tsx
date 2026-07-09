@@ -1,14 +1,17 @@
 import { useGoalActions } from '@renderer/context'
+import { Goal } from '@shared/models'
 import { JSX, useEffect, useState } from 'react'
 
 export type GoalDialogProps = {
   onClose: () => void
+  goal?: Goal
+  mode?: 'rename' | 'description'
 }
 
-export const GoalDialog = ({ onClose }: GoalDialogProps): JSX.Element => {
-  const { createGoal } = useGoalActions()
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
+export const GoalDialog = ({ onClose, goal, mode = 'rename' }: GoalDialogProps): JSX.Element => {
+  const { createGoal, renameGoal } = useGoalActions()
+  const [name, setName] = useState(goal?.name ?? '')
+  const [description, setDescription] = useState(goal?.description ?? '')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
@@ -25,7 +28,8 @@ export const GoalDialog = ({ onClose }: GoalDialogProps): JSX.Element => {
 
     setIsSubmitting(true)
     try {
-      await createGoal(trimmedName, description.trim())
+      if (goal) await renameGoal(goal.id, trimmedName, description.trim())
+      else await createGoal(trimmedName, description.trim())
       onClose()
     } finally {
       setIsSubmitting(false)
@@ -41,8 +45,8 @@ export const GoalDialog = ({ onClose }: GoalDialogProps): JSX.Element => {
         className="w-96 rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="mb-4 font-bold">New Goal</h2>
-        <label className="block text-sm text-zinc-300">
+        <h2 className="mb-4 font-bold">{mode === 'description' ? 'Edit Goal Description' : goal ? 'Rename Goal' : 'New Goal'}</h2>
+        {mode !== 'description' && <label className="block text-sm text-zinc-300">
           Name
           <input
             type="text"
@@ -52,7 +56,7 @@ export const GoalDialog = ({ onClose }: GoalDialogProps): JSX.Element => {
             autoFocus
             className="mt-1 w-full rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500 placeholder:text-zinc-600 focus:border-zinc-300/50"
           />
-        </label>
+        </label>}
         <label className="mt-3 block text-sm text-zinc-300">
           Goal description
           <textarea
@@ -75,7 +79,7 @@ export const GoalDialog = ({ onClose }: GoalDialogProps): JSX.Element => {
             disabled={isSubmitting || name.trim().length === 0}
             className="px-2 py-1 rounded-md border border-yellow-500/50 hover:bg-yellow-500/20 transition-colors duration-100 text-sm disabled:opacity-40 disabled:hover:bg-transparent"
           >
-            Confirm
+            Save
           </button>
         </div>
       </div>

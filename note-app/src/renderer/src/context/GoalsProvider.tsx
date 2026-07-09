@@ -7,6 +7,7 @@ import {
     GoalsState,
     GoalsStateContext
 } from './GoalsContext'
+import { useSettingsActions } from './SettingsContext'
 
 const sortGoals = (goals: Goal[]): Goal[] => [...goals].sort((a, b) => a.createdAt - b.createdAt)
 
@@ -14,6 +15,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     const [goals, setGoals] = useState<Goal[] | undefined>(undefined)
     // null = Quick Notes, the always-available default capture target.
     const [selectedCategory, setSelectedCategory] = useState<CategoryKey>(null)
+    const { updateSettings } = useSettingsActions()
 
     useEffect(() => {
         let cancelled = false
@@ -40,14 +42,32 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         setSelectedCategory(goal.id)
     }, [])
 
+    const renameGoal = useCallback(async (id: string, name: string, description: string) => {
+        const renamed = await window.context.renameGoal(id, name, description)
+        if (!renamed) return
+        setGoals((prev) => prev?.map((goal) => goal.id === id ? renamed : goal))
+    }, [])
+
+    const deleteGoal = useCallback(async (id: string) => {
+        const deleted = await window.context.deleteGoal(id)
+        if (!deleted) return
+        setGoals((prev) => prev?.filter((goal) => goal.id !== id))
+        setSelectedCategory((previous) => previous === id ? null : previous)
+
+        const settings = await window.context.getSettings()
+        if (settings.pinnedGoalIds.includes(id)) {
+            await updateSettings({ pinnedGoalIds: settings.pinnedGoalIds.filter((goalId) => goalId !== id) })
+        }
+    }, [updateSettings])
+
     const stateValue: GoalsState = useMemo(
         () => ({ goals, selectedCategory }),
         [goals, selectedCategory]
     )
 
     const actionsValue: GoalsActions = useMemo(
-        () => ({ selectCategory, createGoal }),
-        [selectCategory, createGoal]
+        () => ({ selectCategory, createGoal, renameGoal, deleteGoal }),
+        [selectCategory, createGoal, renameGoal, deleteGoal]
     )
 
     return (

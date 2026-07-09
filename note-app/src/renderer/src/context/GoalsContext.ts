@@ -14,6 +14,8 @@ export type GoalsState = {
 export type GoalsActions = {
     selectCategory: (key: CategoryKey) => void
     createGoal: (name: string, description: string) => Promise<void>
+    renameGoal: (id: string, name: string, description: string) => Promise<void>
+    deleteGoal: (id: string) => Promise<void>
 }
 
 // Split by concern: action consumers (dialogs, sidebar buttons) should not

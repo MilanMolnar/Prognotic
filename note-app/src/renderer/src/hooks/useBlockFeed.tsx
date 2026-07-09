@@ -29,9 +29,24 @@ export const useBlockFeed = (order: 'asc' | 'desc' = 'asc'): UseBlockFeedResult 
     const { feedBlocks, matchIds } = useMemo(() => {
         const categoryBlocks = blocks
             ?.filter((block) => block.categories.includes(selectedCategory))
-            .sort((a, b) =>
-                order === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
-            );
+            .sort((a, b) => {
+                // Accepted AI routes remain in Quick Notes for review, but
+                // no longer compete with the active inbox at the capture edge.
+                if (selectedCategory === null) {
+                    const aRouted = a.routing?.status === 'applied'
+                    const bRouted = b.routing?.status === 'applied'
+                    if (aRouted !== bRouted) {
+                        // Chat keeps the active capture edge at the bottom,
+                        // while Natural mode keeps it at the top.
+                        return order === 'asc' ? (aRouted ? -1 : 1) : (aRouted ? 1 : -1)
+                    }
+                    if (aRouted && bRouted) {
+                        const decidedAt = (a.routing?.decidedAt ?? 0) - (b.routing?.decidedAt ?? 0)
+                        return order === 'asc' ? -decidedAt : decidedAt
+                    }
+                }
+                return order === 'asc' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt
+            });
 
         if (!categoryBlocks || !isSearching) {
             return { feedBlocks: categoryBlocks, matchIds: new Set<string>() };

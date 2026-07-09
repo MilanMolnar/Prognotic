@@ -1,6 +1,6 @@
 import { TranscribeAudio } from '@shared/types'
 import { app } from 'electron'
-import { getSettings } from '../lib'
+import { getCredential } from '../lib'
 
 // Wispr Flow developer API (platform.wisprflow.ai) — Wispr's dictation
 // service, not to be confused with OpenAI's Whisper model. It accepts a
@@ -23,7 +23,7 @@ export const transcribeAudio: TranscribeAudio = async (audio) => {
         return { error: 'Recording is too long — Wispr Flow accepts up to 6 minutes.' }
     }
 
-    const apiKey = (await getSettings()).whisprflowApiKey.trim()
+    const apiKey = (await getCredential('whisprflow')).trim()
     if (!apiKey) {
         return { error: 'Add your Wispr Flow API key in Settings to use Wispr Flow dictation.' }
     }

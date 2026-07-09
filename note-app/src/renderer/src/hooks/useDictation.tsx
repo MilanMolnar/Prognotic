@@ -39,12 +39,12 @@ export const useDictation = ({
     focusInput
 }: UseDictationParams): UseDictationResult => {
     const { settings } = useSettings()
-    const { dictationMode, whisprflowApiKey } = settings
+    const { dictationMode, hasWhisprflowApiKey } = settings
 
     const windows = useWindowsDictation({ focusInput })
     const wisprFlow = useWisprFlowDictation({
         onFinalTranscript,
-        hasApiKey: whisprflowApiKey.trim().length > 0
+        hasApiKey: hasWhisprflowApiKey
     })
 
     if (dictationMode === 'whisprflow') {

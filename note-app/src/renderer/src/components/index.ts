@@ -6,6 +6,7 @@ export * from "./CategorySidebar"
 export * from "./CollapsedSidebar"
 export * from "./ChatPanel"
 export * from "./GoalDialog"
+export * from './GoalContextMenu'
 export * from "./BlockFeed"
 export * from "./BlockCard"
 export * from "./BlockContextMenu"
@@ -18,3 +19,4 @@ export * from "./NaturalCapturePanel"
 export * from "./FeedHeader"
 export * from "./MarkdownEditor"
 export * from "./SettingsModal"
+export * from './AiActionDialog'
