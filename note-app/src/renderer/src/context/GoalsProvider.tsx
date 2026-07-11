@@ -36,11 +36,21 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         setSelectedCategory(key)
     }, [])
 
+    const registerPersistedGoal = useCallback((goal: Goal) => {
+        setGoals((previous) => {
+            const current = previous ?? []
+            const next = current.some((item) => item.id === goal.id)
+                ? current.map((item) => item.id === goal.id ? goal : item)
+                : [...current, goal]
+            return sortGoals(next)
+        })
+    }, [])
+
     const createGoal = useCallback(async (name: string, description: string, routingHints = '') => {
         const goal = await window.context.createGoal(name, description, routingHints)
-        setGoals((prev) => (prev ? [...prev, goal] : [goal]))
+        registerPersistedGoal(goal)
         setSelectedCategory(goal.id)
-    }, [])
+    }, [registerPersistedGoal])
 
     const renameGoal = useCallback(async (id: string, name: string, description: string, routingHints = '') => {
         const renamed = await window.context.renameGoal(id, name, description, routingHints)
@@ -66,8 +76,8 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     )
 
     const actionsValue: GoalsActions = useMemo(
-        () => ({ selectCategory, createGoal, renameGoal, deleteGoal }),
-        [selectCategory, createGoal, renameGoal, deleteGoal]
+        () => ({ selectCategory, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
+        [selectCategory, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
     )
 
     return (

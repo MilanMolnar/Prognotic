@@ -15,7 +15,7 @@ The AI assistant is implemented as a local-first Electron feature. All provider 
 | Credential storage | Electron `safeStorage`; saved keys are never returned to the renderer |
 | Note-aware assistant | Persistent right-panel conversations, scoped retrieval, streaming, clickable citations |
 | Assistant scope | Open goal, all goals, relevant goals, today, this week, and custom date filters |
-| Quick Note routing | Runs when a Quick Note closes; suggestions use goal descriptions and editable routing hints; decisions retain local history |
+| Quick Note routing | Runs when a Quick Note closes; semantic matching prioritizes goal descriptions and name meaning, preserves honest no-match decisions, and can propose one-click goal creation |
 | Routed-note UX | Selected goal flies to the sidebar; routed notes remain in Quick Notes, are dimmed, move away from active captures, and require per-goal acknowledgement |
 | Inline actions | Full-block and editor-selection Translate/Explain with Copy, Replace, and Continue in chat |
 | Dictation cleanup | Optional AI polishing for Wispr Flow transcripts with visible retry/use-original recovery |
@@ -53,7 +53,9 @@ The right panel streams model responses and persists conversations. The main pro
 
 ### Quick Note routing
 
-Routing begins when a Quick Note block is manually closed or its block window expires, including Natural capture after its final queued save. The classifier compares note content with goal descriptions and user-editable routing hints and must return at least one valid user goal when any goals exist. The user clicks a suggested goal chip to apply that one category. Decisions are retained in a capped per-block history. No automatic category changes, goal creation, Todo routing, or Staging routing occur.
+Routing begins when a Quick Note block is manually closed or its block window expires, including Natural capture after its final queued save. The classifier compares the note's semantic scope with each goal's name, description, and user-editable routing hints, rejecting generic keyword overlap. A confident decision returns ranked existing goals. A deliberate no-match decision retains the best existing goal when available and can include a proposed new goal instead of receiving a fabricated 0.1 match; the keyword fallback is reserved for malformed or empty legacy output.
+
+The user clicks either an existing-goal chip or the green proposed-goal chip. Accepting a proposal creates the goal and applies the route in one main-process operation. No category or goal is created automatically, and Todo or Staging routing is not implemented. Decisions are retained in a capped per-block history.
 
 Accepted routes persist per-goal provenance as unvisited. User-goal rows show derived counts, and the routed block carries a clickable acknowledgement emblem in that goal's feed. Direct user capture is stored as already visited; acknowledgement is independent for each goal on a multi-goal block.
 
@@ -70,9 +72,10 @@ The Settings provider/model is the global default and is always used for routing
 ### Recently completed
 
 1. Added Vitest coverage for provider stream parsing, credential-migration decisions, note ranking, routing fallback, persisted routing history, placement, and animation transitions.
-2. Added user-editable routing examples/keywords and a per-block routing review/history surface.
+2. Added user-editable routing examples/keywords, sidebar unvisited counters, and per-goal acknowledgement for routed notes.
 3. Added selection-aware Translate and Explain actions to the Markdown editor.
 4. Added visible failure/retry or recovery paths for classification, assistant requests, inline actions, and Wispr Flow transcript polishing.
+5. Added semantic no-match routing decisions with a best-existing alternative and one-click proposed-goal creation.
 
 ### Next
 

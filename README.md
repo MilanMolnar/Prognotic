@@ -10,8 +10,8 @@ Notes, goals, settings, encrypted credentials, and assistant history stay in `~/
 - Chat and Natural capture modes with time-windowed appending, Markdown editing, fuzzy search, and dictation.
 - AI assistant with persistent streaming conversations, relevance-ranked note retrieval, citations, goal scopes, today/week/custom dates, and per-conversation model overrides.
 - BYOK Gemini, OpenAI, Claude, and LM Studio. LM Studio offers only models currently loaded in VRAM.
-- Quick Note routing suggestions, per-goal acceptance, routing animation, and mode-aware inbox placement.
-- Full-block and selected-text Translate/Explain, optional Wispr Flow dictation cleanup with retry, routing history, and goal rename/description/delete workflows.
+- Semantic Quick Note routing suggestions, honest low-confidence alternatives, one-click proposed-goal creation, routing animation, and mode-aware inbox placement.
+- Full-block and selected-text Translate/Explain, optional Wispr Flow dictation cleanup with retry, per-goal unvisited counters, and goal rename/description/delete workflows.
 
 ## AI and privacy
 

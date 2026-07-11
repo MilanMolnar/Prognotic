@@ -1,7 +1,7 @@
 import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, maxPinnedGoals, settingsFileName } from "@shared/constants"
 import { reconcileUserGoalPresence, setGoalPresence, userGoalPresenceForCategories } from '@shared/goalPresence'
 import { AppSettings, AssistantConversation, BlockMeta, Goal, LlmCredentialName } from "@shared/models"
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
 import { dialog, safeStorage } from "electron"
 import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "fs-extra"
@@ -271,6 +271,57 @@ export const applyBlockRouting: ApplyBlockRouting = async (id, goalId) => {
         meta.routingHistory = updateRoutingDecision(meta.routingHistory, previousRouting, appliedRouting)
         await writeJsonAtomic(getIndexPath(), index)
         return meta
+    })
+}
+
+export const applyNewGoalRouting: ApplyNewGoalRouting = async (id) => {
+    await ensureDir(getRootDir())
+
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        const suggestion = meta?.routing?.suggestedNewGoal
+        if (
+            !meta?.routing ||
+            meta.routing.status !== 'pending' ||
+            meta.routing.hasConfidentMatch !== false ||
+            !suggestion ||
+            typeof suggestion.name !== 'string'
+        ) return null
+
+        const name = suggestion.name.trim().slice(0, 80)
+        if (!name) return null
+        const confidence = Number.isFinite(suggestion.confidence)
+            ? Math.max(0, Math.min(1, suggestion.confidence))
+            : 0
+        const goalsFile = await loadGoalsFile()
+        const goal: Goal = {
+            id: randomUUID(),
+            name,
+            description: typeof suggestion.description === 'string'
+                ? suggestion.description.trim().slice(0, 500)
+                : '',
+            routingHints: '',
+            createdAt: Date.now()
+        }
+
+        const previousRouting = meta.routing
+        meta.categories = normalizeCategories([...meta.categories, goal.id])
+        meta.goalPresence = setGoalPresence(meta.goalPresence, goal.id, 'routed', false)
+        const appliedRouting: NonNullable<BlockMeta['routing']> = {
+            ...meta.routing,
+            status: 'applied',
+            assignments: [{ goalId: goal.id, confidence }]
+        }
+        meta.routing = appliedRouting
+        meta.routingHistory = updateRoutingDecision(meta.routingHistory, previousRouting, appliedRouting)
+        goalsFile.goals[goal.id] = goal
+
+        await Promise.all([
+            writeJsonAtomic(getGoalsPath(), goalsFile),
+            writeJsonAtomic(getIndexPath(), index)
+        ])
+        return { goal, block: meta }
     })
 }
 

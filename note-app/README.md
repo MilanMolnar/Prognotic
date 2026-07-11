@@ -16,10 +16,10 @@ npm run dev
 - Goal context menu: Rename, Edit description/routing hints, and Delete. Deletion preserves other categories and returns only otherwise-uncategorized blocks to Quick Notes.
 - BYOK Gemini, OpenAI, Claude, and local LM Studio model selection with connection tests.
 - Persistent, note-aware assistant conversations with relevance-ranked retrieval, streaming, clickable citations, rich scope filters, and per-conversation model overrides.
-- Quick Note AI routing after close: click a suggested goal to apply it. Routed notes stay in Quick Notes for review, appear dimmed, move by capture mode, and remain unvisited in the destination goal until their emblem is acknowledged.
+- Quick Note AI routing after close: click an existing-goal suggestion, or create and route to a green proposed goal when no existing goal fits confidently. Routed notes stay in Quick Notes for review, appear dimmed, move by capture mode, and remain unvisited in the destination goal until their emblem is acknowledged.
 - Translate and Explain for full blocks or selected editor text, with Copy, Replace, and Continue in chat.
 - Optional AI cleanup for Wispr Flow transcripts, with Retry and Use original recovery.
-- Goal routing hints, confidence suggestions, capped per-block routing history, and visible classification retry status.
+- Semantic goal matching across names, descriptions, and routing hints; honest low-confidence suggestions; sidebar unvisited counters; per-goal acknowledgement; and visible classification retry status.
 
 ## Settings and credentials
 

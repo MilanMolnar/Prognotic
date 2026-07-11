@@ -6,6 +6,8 @@ export type WriteBlock = (id: BlockMeta['id'], content: NoteContent) => Promise<
 export type CreateBlock = (content: NoteContent, categories: BlockMeta['categories']) => Promise<BlockMeta>
 export type UpdateBlockCategories = (id: BlockMeta['id'], categories: BlockMeta['categories']) => Promise<BlockMeta | null>
 export type ApplyBlockRouting = (id: BlockMeta['id'], goalId: string) => Promise<BlockMeta | null>
+export type ApplyNewGoalRoutingResult = { goal: Goal; block: BlockMeta }
+export type ApplyNewGoalRouting = (id: BlockMeta['id']) => Promise<ApplyNewGoalRoutingResult | null>
 export type AcknowledgeBlockInGoal = (id: BlockMeta['id'], goalId: string) => Promise<BlockMeta | null>
 export type AppendToBlock = (id: BlockMeta['id'], text: string) => Promise<BlockMeta | null>
 export type DeleteBlock = (id: BlockMeta['id']) => Promise<boolean>

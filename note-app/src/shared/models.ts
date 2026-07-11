@@ -1,8 +1,18 @@
+export type SuggestedNewGoal = {
+    name: string
+    description: string
+    confidence: number
+}
+
 export type BlockRouting = {
     status: 'pending' | 'applied' | 'overridden'
     decidedAt: number
     assignments: { goalId: string | null; confidence: number }[]
     model: string
+    // Optional so routing decisions stored before new-goal suggestions remain
+    // valid when loaded from index.json.
+    hasConfidentMatch?: boolean
+    suggestedNewGoal?: SuggestedNewGoal
 }
 
 export type GoalPresenceSource = 'user' | 'routed' | 'assistant' | 'research'

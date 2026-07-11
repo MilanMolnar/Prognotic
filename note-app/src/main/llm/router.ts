@@ -2,8 +2,9 @@ import { BlockMeta, LlmProvider } from '@shared/models'
 import { AssistantModelSelection, AssistantScope, LlmMessage, LlmModel } from '@shared/types'
 import { researchCategory } from '@shared/constants'
 import { getBlocks, getCredential, getGoals, getSettings, readBlock, setBlockRouting } from '@/lib'
-import { parseRoutingAssignments } from './classification'
+import { parseRoutingClassification } from './classification'
 import { rankNoteCandidates } from './noteRanking'
+import { routingSystemPrompt } from './routingPrompt'
 import { readSse } from './streamParser'
 
 type StreamOptions = { signal: AbortSignal; onToken: (text: string) => void }
@@ -275,9 +276,22 @@ export const polishTranscript = async (text: string): Promise<string> => collect
 
 export const classifyBlock = async (blockId: string): Promise<BlockMeta | null> => {
     const [content, goals, settings] = await Promise.all([readBlock(blockId), getGoals(), getSettings()])
-    if (!content.content.trim() || !settings.llm.model || goals.length === 0) return null
+    if (!content.content.trim()) return null
+    if (!settings.llm.model) throw new Error('Choose and test an AI model in Settings before routing notes.')
     const goalList = goals.map((goal) => ({ id: goal.id, name: goal.name, description: goal.description, routingHints: goal.routingHints }))
-    const raw = await collect([{ role: 'system', content: 'Classify the note against the listed goals. You must assign at least one listed goal: choose the most likely goal even when wording is indirect. Compare the note to each goal description and prioritize specific domain evidence over generic action words. A broad goal name alone is not evidence; for example, words such as work, review, task, code, or plan do not imply an employment goal without domain evidence from that goal description. You may add other relevant goals. Return only JSON: {"assignments":[{"goalId":"listed-id","confidence":0-to-1}]}. Never return an empty array or invent goal ids.' }, { role: 'user', content: JSON.stringify({ goals: goalList, note: content.content.slice(0, 6000) }) }])
-    const assignments = parseRoutingAssignments(raw, content.content, goals)
-    return setBlockRouting(blockId, { status: 'pending', decidedAt: Date.now(), assignments, model: `${settings.llm.provider}:${settings.llm.model}` })
+    const raw = await collect([
+        { role: 'system', content: routingSystemPrompt },
+        { role: 'user', content: JSON.stringify({ goals: goalList, note: content.content.slice(0, 6000) }) }
+    ])
+    const classification = parseRoutingClassification(raw, content.content, goals)
+    return setBlockRouting(blockId, {
+        status: 'pending',
+        decidedAt: Date.now(),
+        assignments: classification.assignments,
+        model: [settings.llm.provider, settings.llm.model].join(':'),
+        hasConfidentMatch: classification.hasConfidentMatch,
+        ...(classification.suggestedNewGoal
+            ? { suggestedNewGoal: classification.suggestedNewGoal }
+            : {})
+    })
 }

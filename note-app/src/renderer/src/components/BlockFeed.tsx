@@ -89,7 +89,6 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
                 isOpen={openBlockId === block.id}
                 isMatch={matchIds.has(block.id)}
                 isRouted={selectedCategory === null && block.routing?.status === 'applied'}
-                routeDirection="up"
                 onSelect={handleBlockSelect(block.id)}
                 onDelete={handleBlockDelete(block.id)}
               />

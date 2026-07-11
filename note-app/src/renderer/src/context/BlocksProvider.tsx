@@ -1,4 +1,4 @@
-import { BlockMeta, NoteContent } from '@shared/models'
+import { BlockMeta, Goal, NoteContent } from '@shared/models'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     BlocksActions,
@@ -7,7 +7,7 @@ import {
     BlocksStateContext,
     SelectedBlock
 } from './BlocksContext'
-import { useGoals } from './GoalsContext'
+import { useGoalActions, useGoals } from './GoalsContext'
 import { useSettings } from './SettingsContext'
 
 const sortBlocks = (blocks: BlockMeta[]): BlockMeta[] =>
@@ -27,6 +27,7 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
 
     const { settings } = useSettings()
     const { selectedCategory } = useGoals()
+    const { registerPersistedGoal } = useGoalActions()
     const windowMs = settings.blockWindowMinutes * 60_000
 
     useEffect(() => {
@@ -330,6 +331,21 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         return true
     }, [])
 
+    const applyNewGoalRouting = useCallback(async (id: string): Promise<Goal | null> => {
+        const result = await window.context.applyNewGoalRouting(id)
+        if (!result) return null
+        registerPersistedGoal(result.goal)
+        setBlocks((previous) => previous?.map((block) =>
+            block.id === result.block.id ? result.block : block
+        ))
+        setRoutingErrors((previous) => {
+            const next = { ...previous }
+            delete next[id]
+            return next
+        })
+        return result.goal
+    }, [registerPersistedGoal])
+
     const acknowledgeBlockInGoal = useCallback(async (id: string, goalId: string): Promise<boolean> => {
         const updatedMeta = await window.context.acknowledgeBlockInGoal(id, goalId)
         if (!updatedMeta) return false
@@ -380,8 +396,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     )
 
     const actionsValue: BlocksActions = useMemo(
-        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, acknowledgeBlockInGoal, classifyBlock: classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
-        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, acknowledgeBlockInGoal, classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
+        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, applyNewGoalRouting, acknowledgeBlockInGoal, classifyBlock: classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
+        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, applyNewGoalRouting, acknowledgeBlockInGoal, classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
     )
 
     return (

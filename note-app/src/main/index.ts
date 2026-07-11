@@ -2,10 +2,10 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, BrowserWindowConstructorOptions, ipcMain, session, shell, systemPreferences } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
-import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setSettings, updateBlockCategories, writeBlock } from './lib'
+import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, applyNewGoalRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setSettings, updateBlockCategories, writeBlock } from './lib'
 import { toggleWindowsDictation } from './dictation/windows'
 import { transcribeAudio } from './dictation/wisprflow'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
 import { classifyBlock, listModels, polishTranscript, runInlineAction, streamAssistant, testConnection } from './llm/router'
 
 const assistantStreams = new Map<string, AbortController>()
@@ -45,8 +45,8 @@ const platformWindowOptions = (): BrowserWindowConstructorOptions => {
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1170,
-    height: 870,
+    width: 1500,
+    height: 900,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -109,6 +109,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('createBlock', (_, ...args: Parameters<CreateBlock>) => createBlock(...args))
   ipcMain.handle('updateBlockCategories', (_, ...args: Parameters<UpdateBlockCategories>) => updateBlockCategories(...args))
   ipcMain.handle('applyBlockRouting', (_, ...args: Parameters<ApplyBlockRouting>) => applyBlockRouting(...args))
+  ipcMain.handle('applyNewGoalRouting', (_, ...args: Parameters<ApplyNewGoalRouting>) => applyNewGoalRouting(...args))
   ipcMain.handle('acknowledgeBlockInGoal', (_, ...args: Parameters<AcknowledgeBlockInGoal>) => acknowledgeBlockInGoal(...args))
   ipcMain.handle('appendToBlock', (_, ...args: Parameters<AppendToBlock>) => appendToBlock(...args))
   ipcMain.handle('deleteBlock', (_, ...args: Parameters<DeleteBlock>) => deleteBlock(...args))

@@ -1,4 +1,4 @@
-import { BlockMeta, NoteContent } from '@shared/models'
+import { BlockMeta, Goal, NoteContent } from '@shared/models'
 import { createContext, useContext } from 'react'
 
 export type SelectedBlock = BlockMeta & { content: string }
@@ -30,6 +30,7 @@ export type BlocksActions = {
     // Multi-goal plumbing: replaces the block's full category list.
     updateBlockCategories: (id: string, categories: (string | null)[]) => Promise<void>
     applyBlockRouting: (id: string, goalId: string) => Promise<boolean>
+    applyNewGoalRouting: (id: string) => Promise<Goal | null>
     acknowledgeBlockInGoal: (id: string, goalId: string) => Promise<boolean>
     classifyBlock: (id: string) => Promise<void>
     // Silent delete for blocks left blank — no confirmation dialog; the

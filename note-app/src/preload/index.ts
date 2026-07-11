@@ -1,4 +1,4 @@
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, OnAssistantStreamEvent, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, OnAssistantStreamEvent, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 
 
@@ -29,6 +29,7 @@ try {
       return ipcRenderer.invoke('updateBlockCategories', ...args)
     },
     applyBlockRouting: (...args: Parameters<ApplyBlockRouting>) => ipcRenderer.invoke('applyBlockRouting', ...args),
+    applyNewGoalRouting: (...args: Parameters<ApplyNewGoalRouting>) => ipcRenderer.invoke('applyNewGoalRouting', ...args),
     acknowledgeBlockInGoal: (...args: Parameters<AcknowledgeBlockInGoal>) => ipcRenderer.invoke('acknowledgeBlockInGoal', ...args),
     appendToBlock: (...args: Parameters<AppendToBlock>) => {
       return ipcRenderer.invoke('appendToBlock', ...args)

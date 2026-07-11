@@ -115,7 +115,6 @@ export const NaturalCapturePanel = ({
                 isOpen={false}
                 isMatch={matchIds.has(block.id)}
                 isRouted={selectedCategory === null && block.routing?.status === 'applied'}
-                routeDirection="down"
                 onSelect={handleBlockSelect(block.id)}
                 onDelete={handleBlockDelete(block.id)}
               />

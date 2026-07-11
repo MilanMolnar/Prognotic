@@ -10,9 +10,8 @@ import {
 
 export const PanelsProvider = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true)
-    // The assistant is a secondary surface; it starts collapsed.
-    const [isRightPanelOpen, setIsRightPanelOpen] = useState(false)
-    const [rightPanelWidth, setRightPanelWidthState] = useState(300)
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
+    const [rightPanelWidth, setRightPanelWidthState] = useState(400)
 
     const toggleLeftPanel = useCallback(() => {
         setIsLeftPanelOpen((prev) => !prev)

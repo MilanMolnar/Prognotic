@@ -3,11 +3,18 @@ import { useAssistantActions, useBlockActions, useBlocks, useGoals } from '@rend
 import { blockLabel, cn, formatDateFromMs } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { isBlockUnvisitedInGoal } from '@shared/goalPresence'
-import { BlockMeta } from '@shared/models'
-import { JSX, MouseEvent, useLayoutEffect, useRef, useState } from 'react'
+import { BlockMeta, GoalPresenceSource } from '@shared/models'
+import { JSX, MouseEvent, useState } from 'react'
 import { FaRegTrashAlt } from 'react-icons/fa'
 import { showBlockToast } from './blockToast'
 import { flyLabelToCategoryRow } from './categoryFlight'
+
+const originLabels: Record<GoalPresenceSource, string> = {
+  user: 'User',
+  routed: 'AI-routing',
+  assistant: 'AI-chat',
+  research: 'Research'
+}
 
 export type BlockCardProps = {
   block: BlockMeta
@@ -15,7 +22,6 @@ export type BlockCardProps = {
   isOpen: boolean
   isMatch?: boolean
   isRouted?: boolean
-  routeDirection?: 'up' | 'down'
   onSelect: () => void
   onDelete: () => Promise<void>
 }
@@ -26,7 +32,6 @@ export const BlockCard = ({
   isOpen,
   isMatch = false,
   isRouted = false,
-  routeDirection = 'down',
   onSelect,
   onDelete
 }: BlockCardProps): JSX.Element => {
@@ -35,12 +40,16 @@ export const BlockCard = ({
   const [aiResult, setAiResult] = useState<{ action: 'translate' | 'explain'; text: string } | null>(null)
   const [aiFailure, setAiFailure] = useState<{ action: 'translate' | 'explain'; message: string } | null>(null)
   const [isAiRunning, setIsAiRunning] = useState(false)
-  const [isRoutingHistoryOpen, setIsRoutingHistoryOpen] = useState(false)
   const [applyingGoalId, setApplyingGoalId] = useState<string | null>(null)
+  const [isApplyingNewGoal, setIsApplyingNewGoal] = useState(false)
   const [isAcknowledging, setIsAcknowledging] = useState(false)
-  const cardRef = useRef<HTMLFieldSetElement>(null)
-  const wasRoutedRef = useRef(isRouted)
-  const { updateBlockContent, applyBlockRouting, acknowledgeBlockInGoal, classifyBlock } = useBlockActions()
+  const {
+    updateBlockContent,
+    applyBlockRouting,
+    applyNewGoalRouting,
+    acknowledgeBlockInGoal,
+    classifyBlock
+  } = useBlockActions()
   const { routingErrors, routingInProgressIds } = useBlocks()
   const { continueWithText } = useAssistantActions()
   const { goals, selectedCategory } = useGoals()
@@ -70,27 +79,64 @@ export const BlockCard = ({
 
   const applySuggestedGoal = async (goalId: string, goalName: string, event: MouseEvent<HTMLButtonElement>): Promise<void> => {
     event.stopPropagation()
-    if (applyingGoalId !== null) return
+    if (applyingGoalId !== null || isApplyingNewGoal) return
     const alreadyInGoal = block.categories.includes(goalId)
     setApplyingGoalId(goalId)
-    const applied = await applyBlockRouting(block.id, goalId)
-    setApplyingGoalId(null)
+    let applied = false
+    try {
+      applied = await applyBlockRouting(block.id, goalId)
+    } catch {
+      showBlockToast('Could not apply this routing suggestion.')
+    } finally {
+      setApplyingGoalId(null)
+    }
     if (!applied) return
     if (alreadyInGoal) showBlockToast(`This note block has already been routed to ${goalName}.`)
     else flyLabelToCategoryRow(goalName, { x: event.clientX, y: event.clientY }, goalId)
   }
 
-  const routingHistory = block.routingHistory?.length
-    ? block.routingHistory
-    : block.routing ? [block.routing] : []
+  const applySuggestedNewGoal = async (event: MouseEvent<HTMLButtonElement>): Promise<void> => {
+    event.stopPropagation()
+    if (applyingGoalId !== null || isApplyingNewGoal) return
+    const from = { x: event.clientX, y: event.clientY }
+    setIsApplyingNewGoal(true)
+    try {
+      const goal = await applyNewGoalRouting(block.id)
+      if (!goal) {
+        showBlockToast('Could not create and route to the suggested goal.')
+        return
+      }
+      requestAnimationFrame(() => {
+        flyLabelToCategoryRow(goal.name, from, goal.id)
+      })
+    } catch {
+      showBlockToast('Could not create and route to the suggested goal.')
+    } finally {
+      setIsApplyingNewGoal(false)
+    }
+  }
+
   const routingError = routingErrors[block.id]
   const isRouting = routingInProgressIds.has(block.id)
+  const pendingRouting = block.routing?.status === 'pending' ? block.routing : null
+  const existingRoutingAssignments = pendingRouting?.assignments.filter(
+    (assignment): assignment is { goalId: string; confidence: number } =>
+      typeof assignment.goalId === 'string'
+  ) ?? []
+  const suggestedNewGoal = pendingRouting?.hasConfidentMatch === false
+    ? pendingRouting.suggestedNewGoal
+    : undefined
+  const isApplyingRouting = applyingGoalId !== null || isApplyingNewGoal
   const viewedGoalId = selectedCategory !== null &&
     selectedCategory !== researchCategory &&
     goals?.some((goal) => goal.id === selectedCategory)
       ? selectedCategory
       : null
+  const viewedGoalPresence = viewedGoalId ? block.goalPresence?.[viewedGoalId] : undefined
   const isUnvisited = viewedGoalId !== null && isBlockUnvisitedInGoal(block, viewedGoalId)
+  const originLabel = viewedGoalPresence && viewedGoalPresence.source !== 'user'
+    ? originLabels[viewedGoalPresence.source]
+    : null
 
   const acknowledge = async (event: MouseEvent<HTMLButtonElement>): Promise<void> => {
     event.stopPropagation()
@@ -106,19 +152,6 @@ export const BlockCard = ({
     }
   }
 
-  useLayoutEffect(() => {
-    if (isRouted && !wasRoutedRef.current) {
-      cardRef.current?.animate(
-        [
-          { transform: `translateY(${routeDirection === 'up' ? '20px' : '-20px'})`, opacity: 1 },
-          { transform: 'translateY(0)', opacity: 0.5 }
-        ],
-        { duration: 420, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
-      )
-    }
-    wasRoutedRef.current = isRouted
-  }, [isRouted, routeDirection])
-
   return (
     // The context menu is a sibling (not a child) of the card: portal events
     // bubble through the React tree, so nesting it would make menu clicks
@@ -127,7 +160,6 @@ export const BlockCard = ({
     {/* A fieldset so the legend timestamp sits in a real gap of the border
         line — no background masking needed over the translucent theme. */}
     <fieldset
-      ref={cardRef}
       onClick={onSelect}
       onContextMenu={handleContextMenu}
       style={isRouted && !isOpen ? { opacity: 0.5 } : undefined}
@@ -187,26 +219,48 @@ export const BlockCard = ({
             ))
           : 'Loading...'}
       </div>
-      {block.routing?.status === 'pending' && (
-        <div className="mt-2 flex flex-wrap gap-1">{block.routing.assignments.length > 0 ? block.routing.assignments.filter((assignment): assignment is { goalId: string; confidence: number } => typeof assignment.goalId === 'string').map((assignment) => {
-          const goalName = goals?.find((goal) => goal.id === assignment.goalId)?.name ?? 'Goal'
-          return <button type="button" key={assignment.goalId} disabled={applyingGoalId !== null} onClick={(event) => { void applySuggestedGoal(assignment.goalId, goalName, event) }} className="rounded border border-yellow-500/30 px-1 py-0.5 text-xs text-yellow-500 transition-colors hover:bg-yellow-500/10 disabled:opacity-50">Suggested: {goalName} ({Math.round(assignment.confidence * 100)}%)</button>
-        }) : <span className="text-xs text-zinc-500">AI found no matching goal</span>}</div>
+      {pendingRouting && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {existingRoutingAssignments.map((assignment) => {
+            const goalName = goals?.find((goal) => goal.id === assignment.goalId)?.name ?? 'Goal'
+            return <button
+              type="button"
+              key={assignment.goalId}
+              disabled={isApplyingRouting}
+              onClick={(event) => { void applySuggestedGoal(assignment.goalId, goalName, event) }}
+              className="rounded border border-yellow-500/30 px-1 py-0.5 text-xs text-yellow-500 transition-colors hover:bg-yellow-500/10 disabled:opacity-50"
+            >
+              Suggested: {goalName} ({Math.round(assignment.confidence * 100)}%)
+            </button>
+          })}
+          {suggestedNewGoal && <button
+            type="button"
+            title="Create this goal and route the note"
+            disabled={isApplyingRouting}
+            onClick={(event) => { void applySuggestedNewGoal(event) }}
+            className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1 py-0.5 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+          >
+            New goal: {suggestedNewGoal.name} ({Math.round(suggestedNewGoal.confidence * 100)}%)
+          </button>}
+          {existingRoutingAssignments.length === 0 && !suggestedNewGoal && (
+            <span className="text-xs text-zinc-500">AI found no matching goal</span>
+          )}
+        </div>
       )}
       {(routingError || isRouting) && <div className="mt-2 flex items-center gap-2 text-xs" role={routingError ? 'alert' : 'status'}>
         <span className={routingError ? 'text-red-400' : 'text-zinc-500'}>{routingError ?? 'Checking goal suggestions...'}</span>
         {routingError && <button type="button" disabled={isRouting} onClick={(event) => { event.stopPropagation(); void classifyBlock(block.id) }} className="rounded border border-red-400/40 px-1.5 py-0.5 text-red-300 hover:bg-red-500/10 disabled:opacity-50">Retry</button>}
       </div>}
-      {routingHistory.length > 0 && <div className="mt-2 text-xs">
-        <button type="button" onClick={(event) => { event.stopPropagation(); setIsRoutingHistoryOpen((open) => !open) }} className="text-zinc-500 hover:text-zinc-300">{isRoutingHistoryOpen ? 'Hide' : 'Show'} routing history ({routingHistory.length})</button>
-        {isRoutingHistoryOpen && <ol className="mt-1 space-y-1 rounded border border-white/10 bg-black/10 p-2 text-zinc-500">{routingHistory.map((entry) => <li key={`${entry.decidedAt}:${entry.model}`}>
-          <span className="text-zinc-400">{new Date(entry.decidedAt).toLocaleString()}</span>{' · '}{entry.status}{' · '}{entry.model}{entry.assignments.length > 0 ? ` · ${entry.assignments.map((assignment) => `${goals?.find((goal) => goal.id === assignment.goalId)?.name ?? 'Goal'} ${Math.round(assignment.confidence * 100)}%`).join(', ')}` : ' · no suggestion'}
-        </li>)}</ol>}
-      </div>}
       {(aiFailure || isAiRunning) && <div className="mt-2 flex items-center gap-2 text-xs" role={aiFailure ? 'alert' : 'status'}>
         <span className={aiFailure ? 'text-red-400' : 'text-zinc-500'}>{aiFailure?.message ?? 'Running AI action...'}</span>
         {aiFailure && <button type="button" disabled={isAiRunning} onClick={(event) => { event.stopPropagation(); void runAiAction(aiFailure.action) }} className="rounded border border-red-400/40 px-1.5 py-0.5 text-red-300 hover:bg-red-500/10 disabled:opacity-50">Retry</button>}
       </div>}
+      {originLabel && <span className={cn(
+        'pointer-events-none absolute bottom-0 right-3 translate-y-1/2 rounded-full border bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium leading-none shadow-sm transition-colors',
+        isUnvisited ? 'border-yellow-500/40 text-yellow-400' : 'border-white/10 text-zinc-500'
+      )}>
+        {originLabel}
+      </span>}
     </fieldset>
     {menuPosition && (
       <BlockContextMenu

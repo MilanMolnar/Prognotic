@@ -26,7 +26,9 @@ describe('routing presentation', () => {
 
     it('animates only a known non-applied to applied transition', () => {
         expect(becameAppliedRouting(false, undefined, 'applied')).toBe(false)
+        expect(becameAppliedRouting(true, undefined, 'applied')).toBe(true)
         expect(becameAppliedRouting(true, 'pending', 'applied')).toBe(true)
+        expect(becameAppliedRouting(true, 'overridden', 'applied')).toBe(true)
         expect(becameAppliedRouting(true, 'applied', 'applied')).toBe(false)
     })
 })
