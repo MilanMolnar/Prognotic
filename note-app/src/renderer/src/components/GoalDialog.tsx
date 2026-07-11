@@ -12,6 +12,7 @@ export const GoalDialog = ({ onClose, goal, mode = 'rename' }: GoalDialogProps):
   const { createGoal, renameGoal } = useGoalActions()
   const [name, setName] = useState(goal?.name ?? '')
   const [description, setDescription] = useState(goal?.description ?? '')
+  const [routingHints, setRoutingHints] = useState(goal?.routingHints ?? '')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
@@ -28,8 +29,8 @@ export const GoalDialog = ({ onClose, goal, mode = 'rename' }: GoalDialogProps):
 
     setIsSubmitting(true)
     try {
-      if (goal) await renameGoal(goal.id, trimmedName, description.trim())
-      else await createGoal(trimmedName, description.trim())
+      if (goal) await renameGoal(goal.id, trimmedName, description.trim(), routingHints.trim())
+      else await createGoal(trimmedName, description.trim(), routingHints.trim())
       onClose()
     } finally {
       setIsSubmitting(false)
@@ -66,6 +67,17 @@ export const GoalDialog = ({ onClose, goal, mode = 'rename' }: GoalDialogProps):
             placeholder="Describe this goal thoroughly — the description will guide automatic sorting of your notes."
             className="mt-1 w-full resize-none rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500 placeholder:text-zinc-600 focus:border-zinc-300/50"
           />
+        </label>
+        <label className="mt-3 block text-sm text-zinc-300">
+          Routing examples or keywords
+          <textarea
+            rows={3}
+            value={routingHints}
+            onChange={(event) => setRoutingHints(event.target.value)}
+            placeholder="Examples: sprint planning, customer feedback, quarterly report"
+            className="mt-1 w-full resize-none rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500 placeholder:text-zinc-600 focus:border-zinc-300/50"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">Used with the goal description when AI suggests a destination.</span>
         </label>
         <div className="mt-4 flex justify-end gap-2">
           <button

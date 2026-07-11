@@ -1,11 +1,13 @@
 import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, maxPinnedGoals, settingsFileName } from "@shared/constants"
+import { reconcileUserGoalPresence, setGoalPresence, userGoalPresenceForCategories } from '@shared/goalPresence'
 import { AppSettings, AssistantConversation, BlockMeta, Goal, LlmCredentialName } from "@shared/models"
-import { AppendToBlock, ApplyBlockRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
 import { dialog, safeStorage } from "electron"
 import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "fs-extra"
 import { homedir } from "os"
 import welcomeNoteFile from '../../../resources/welcome-note.md?asset'
+import { normalizeCategories, planLegacyWisprMigration, recordRoutingDecision, updateRoutingDecision } from './persistenceHelpers'
 
 
 export const separator = (): string => {
@@ -44,12 +46,6 @@ const writeJsonAtomic = async (filePath: string, data: unknown): Promise<void> =
     const tmpPath = `${filePath}.tmp`
     await writeFile(tmpPath, JSON.stringify(data, null, 2), { encoding: fileEncoding })
     await rename(tmpPath, filePath)
-}
-
-// A block always belongs to at least one category; duplicates are dropped.
-const normalizeCategories = (categories: (string | null)[]): (string | null)[] => {
-    const unique = [...new Set(categories)]
-    return unique.length > 0 ? unique : [null]
 }
 
 // Entries written before multi-goal support carry a single `category`
@@ -211,13 +207,16 @@ export const createBlock: CreateBlock = async (content, categories) => {
         console.info(`Creating block ${id}`)
         await writeFile(getBlockPath(file), content.content, { encoding: fileEncoding })
 
+        const normalizedCategories = normalizeCategories(categories)
+
         const meta: BlockMeta = {
             id,
             file,
             createdAt: now,
             updatedAt: now,
-            categories: normalizeCategories(categories),
+            categories: normalizedCategories,
             excerpt: makeExcerpt(content.content),
+            goalPresence: userGoalPresenceForCategories(normalizedCategories),
         }
         index.blocks[id] = meta
         await writeJsonAtomic(getIndexPath(), index)
@@ -236,7 +235,9 @@ export const updateBlockCategories: UpdateBlockCategories = async (id, categorie
         if (!meta) return null
 
         console.info(`Updating categories of block ${id}`)
-        meta.categories = normalizeCategories(categories)
+        const normalizedCategories = normalizeCategories(categories)
+        meta.goalPresence = reconcileUserGoalPresence(meta.goalPresence, meta.categories, normalizedCategories)
+        meta.categories = normalizedCategories
         await writeJsonAtomic(getIndexPath(), index)
 
         return meta
@@ -249,6 +250,7 @@ export const setBlockRouting = async (id: string, routing: NonNullable<BlockMeta
         const meta = index.blocks[id]
         if (!meta) return null
         meta.routing = routing
+        meta.routingHistory = recordRoutingDecision(meta.routingHistory, routing)
         await writeJsonAtomic(getIndexPath(), index)
         return meta
     })
@@ -261,8 +263,26 @@ export const applyBlockRouting: ApplyBlockRouting = async (id, goalId) => {
         if (!meta?.routing || meta.routing.status !== 'pending') return null
         const assignment = meta.routing.assignments.find((item) => item.goalId === goalId)
         if (!assignment) return null
+        const previousRouting = meta.routing
         meta.categories = normalizeCategories([...meta.categories, goalId])
-        meta.routing = { ...meta.routing, status: 'applied', assignments: [assignment] }
+        meta.goalPresence = setGoalPresence(meta.goalPresence, goalId, 'routed', false)
+        const appliedRouting: NonNullable<BlockMeta['routing']> = { ...meta.routing, status: 'applied', assignments: [assignment] }
+        meta.routing = appliedRouting
+        meta.routingHistory = updateRoutingDecision(meta.routingHistory, previousRouting, appliedRouting)
+        await writeJsonAtomic(getIndexPath(), index)
+        return meta
+    })
+}
+
+export const acknowledgeBlockInGoal: AcknowledgeBlockInGoal = async (id, goalId) => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta?.categories.includes(goalId)) return null
+        const presence = meta.goalPresence?.[goalId]
+        if (!presence) return meta
+
+        meta.goalPresence = setGoalPresence(meta.goalPresence, goalId, presence.source, true)
         await writeJsonAtomic(getIndexPath(), index)
         return meta
     })
@@ -379,7 +399,7 @@ export const getGoals: GetGoals = async () => {
     return Object.values(goalsFile.goals)
 }
 
-export const createGoal: CreateGoal = async (name, description) => {
+export const createGoal: CreateGoal = async (name, description, routingHints = '') => {
     await ensureDir(getRootDir())
 
     return withIndexLock(async () => {
@@ -388,6 +408,7 @@ export const createGoal: CreateGoal = async (name, description) => {
             id: randomUUID(),
             name: name.trim(),
             description: description.trim(),
+            routingHints: routingHints.trim(),
             createdAt: Date.now(),
         }
 
@@ -399,13 +420,14 @@ export const createGoal: CreateGoal = async (name, description) => {
     })
 }
 
-export const renameGoal: RenameGoal = async (id, name, description) => {
+export const renameGoal: RenameGoal = async (id, name, description, routingHints = '') => {
     return withIndexLock(async () => {
         const goalsFile = await loadGoalsFile()
         const goal = goalsFile.goals[id]
         if (!goal) return null
         goal.name = name.trim()
         goal.description = description.trim()
+        goal.routingHints = routingHints.trim()
         await writeJsonAtomic(getGoalsPath(), goalsFile)
         return goal
     })
@@ -421,6 +443,11 @@ export const deleteGoal: DeleteGoal = async (id) => {
         for (const block of Object.values(index.blocks)) {
             if (block.categories.includes(id)) {
                 block.categories = normalizeCategories(block.categories.filter((category) => category !== id))
+            }
+            if (block.goalPresence?.[id]) {
+                const nextPresence = { ...block.goalPresence }
+                delete nextPresence[id]
+                block.goalPresence = Object.keys(nextPresence).length > 0 ? nextPresence : undefined
             }
         }
 
@@ -506,7 +533,7 @@ const credentialFlags: Record<LlmCredentialName, CredentialFlag> = {
 
 const credentialFlag = (name: LlmCredentialName): CredentialFlag => credentialFlags[name]
 
-export const setCredential = async (name: LlmCredentialName, value: string): Promise<AppSettings> => {
+const storeCredential = async (name: LlmCredentialName, value: string): Promise<void> => {
     await ensureDir(getRootDir())
     ensureEncryptedStorage()
     const secrets = await loadSecretFile()
@@ -514,6 +541,10 @@ export const setCredential = async (name: LlmCredentialName, value: string): Pro
     if (trimmed) secrets.values[name] = safeStorage.encryptString(trimmed).toString('base64')
     else delete secrets.values[name]
     await writeJsonAtomic(getSecretsPath(), secrets)
+}
+
+export const setCredential = async (name: LlmCredentialName, value: string): Promise<AppSettings> => {
+    await storeCredential(name, value)
     return getSettings()
 }
 
@@ -534,10 +565,15 @@ export const getSettings: GetSettings = async () => {
     }
 
     // Migrate the legacy plaintext Wispr Flow key once, then never return it
-    // over IPC again.
-    if (typeof raw.whisprflowApiKey === 'string' && raw.whisprflowApiKey.trim() && !(await getCredential('whisprflow'))) {
+    // over IPC again. If an encrypted key already exists, discard any stale
+    // plaintext copy immediately.
+    const migration = planLegacyWisprMigration(raw, (await getCredential('whisprflow')).length > 0)
+    if (migration.removePlaintextImmediately) {
+        delete raw.whisprflowApiKey
+        await writeJsonAtomic(getSettingsPath(), raw)
+    } else if (migration.keyToEncrypt) {
         try {
-            await setCredential('whisprflow', raw.whisprflowApiKey)
+            await storeCredential('whisprflow', migration.keyToEncrypt)
             delete raw.whisprflowApiKey
             await writeJsonAtomic(getSettingsPath(), raw)
         } catch {

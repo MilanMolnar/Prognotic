@@ -2,6 +2,7 @@ import { BlockCard, NaturalCaptureEditor } from '@/components'
 import { useGoals } from '@renderer/context'
 import { useBlockFeed } from '@renderer/hooks/useBlockFeed'
 import { cn } from '@renderer/utils'
+import { becameAppliedRouting } from '@renderer/utils/routing'
 import { ComponentProps, JSX, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 
 export type NaturalCapturePanelProps = ComponentProps<'div'>
@@ -41,19 +42,10 @@ export const NaturalCapturePanel = ({
   const openTarget =
     openBlockId !== null ? feedBlocks?.find((block) => block.id === openBlockId) : undefined
   const resumeContent = openTarget ? blockContents[openTarget.id] : ''
-  const closedBlocks = useMemo(() => [...(feedBlocks ?? [])]
-    .filter((block) => block.id !== openBlockId)
-    .sort((a, b) => {
-      if (selectedCategory === null) {
-        const aRouted = a.routing?.status === 'applied'
-        const bRouted = b.routing?.status === 'applied'
-        if (aRouted !== bRouted) return aRouted ? 1 : -1
-        if (aRouted && bRouted) {
-          return (a.routing?.decidedAt ?? 0) - (b.routing?.decidedAt ?? 0)
-        }
-      }
-      return 0
-    }), [feedBlocks, openBlockId, selectedCategory])
+  const closedBlocks = useMemo(
+    () => (feedBlocks ?? []).filter((block) => block.id !== openBlockId),
+    [feedBlocks, openBlockId]
+  )
 
   const registerItemRef = useCallback((id: string) => (element: HTMLLIElement | null): void => {
     if (element) itemRefs.current.set(id, element)
@@ -68,7 +60,11 @@ export const NaturalCapturePanel = ({
       if (!element) continue
       const current = element.getBoundingClientRect()
       const previous = previousRectsRef.current.get(block.id)
-      const becameRouted = previousRoutingRef.current.has(block.id) && previousRoutingRef.current.get(block.id) !== 'applied' && block.routing?.status === 'applied'
+      const becameRouted = becameAppliedRouting(
+        previousRoutingRef.current.has(block.id),
+        previousRoutingRef.current.get(block.id),
+        block.routing?.status
+      )
       if (selectedCategory === null && becameRouted) {
         const deltaY = previous ? previous.top - current.top : 0
         const startY = previous && Math.abs(deltaY) > 1 ? deltaY : -20

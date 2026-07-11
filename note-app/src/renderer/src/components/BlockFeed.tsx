@@ -1,6 +1,7 @@
 import { BlockCard } from '@/components'
 import { useBlockFeed } from '@renderer/hooks/useBlockFeed'
 import { cn } from '@renderer/utils'
+import { becameAppliedRouting } from '@renderer/utils/routing'
 import { useGoals } from '@renderer/context'
 import { isEmpty } from 'lodash'
 import { ComponentProps, JSX, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
@@ -47,7 +48,11 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
       if (!element) continue
       const current = element.getBoundingClientRect()
       const previous = previousRectsRef.current.get(block.id)
-      const becameRouted = previousRoutingRef.current.has(block.id) && previousRoutingRef.current.get(block.id) !== 'applied' && block.routing?.status === 'applied'
+      const becameRouted = becameAppliedRouting(
+        previousRoutingRef.current.has(block.id),
+        previousRoutingRef.current.get(block.id),
+        block.routing?.status
+      )
       if (selectedCategory === null && becameRouted) {
         const deltaY = previous ? previous.top - current.top : 0
         const startY = previous && Math.abs(deltaY) > 1 ? deltaY : -20

@@ -13,12 +13,13 @@ npm run dev
 
 - Quick Notes, Research, custom goals, pinned goals, and multi-goal blocks.
 - Chat and Natural capture modes, MDXEditor, fuzzy search, Windows dictation, and Wispr Flow dictation.
-- Goal context menu: Rename, Edit description, and Delete. Deleting a goal returns its blocks to Quick Notes.
+- Goal context menu: Rename, Edit description/routing hints, and Delete. Deletion preserves other categories and returns only otherwise-uncategorized blocks to Quick Notes.
 - BYOK Gemini, OpenAI, Claude, and local LM Studio model selection with connection tests.
-- Persistent, note-aware assistant conversations with streaming and clickable note citations.
-- Quick Note AI routing after close: click a suggested goal to apply it. Routed notes stay in Quick Notes for review, appear dimmed, and move to the top in chat mode or the bottom in Natural mode.
-- Translate and Explain block actions with Copy, Replace note, and Continue in chat.
-- Optional AI dictation cleanup before the user reviews the transcript.
+- Persistent, note-aware assistant conversations with relevance-ranked retrieval, streaming, clickable citations, rich scope filters, and per-conversation model overrides.
+- Quick Note AI routing after close: click a suggested goal to apply it. Routed notes stay in Quick Notes for review, appear dimmed, move by capture mode, and remain unvisited in the destination goal until their emblem is acknowledged.
+- Translate and Explain for full blocks or selected editor text, with Copy, Replace, and Continue in chat.
+- Optional AI cleanup for Wispr Flow transcripts, with Retry and Use original recovery.
+- Goal routing hints, confidence suggestions, capped per-block routing history, and visible classification retry status.
 
 ## Settings and credentials
 
@@ -46,6 +47,7 @@ The app stores data in `~/NoteMark/`:
 | `npm run dev` | Electron development with HMR |
 | `npm run build` | Type-check and build production bundles |
 | `npm run typecheck` | TypeScript validation |
+| `npm test` | Vitest unit tests |
 | `npm run lint` | ESLint |
 
 For architecture and IPC details, see [DEVELOPER.md](./DEVELOPER.md). For AI status and backlog, see [AI_PLAN.MD](../AI_PLAN.MD).

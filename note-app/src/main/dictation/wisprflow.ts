@@ -10,8 +10,8 @@ const wisprFlowEndpoint = 'https://platform-api.wisprflow.ai/api/v1/dash/api'
 
 const maxAudioBytes = 25 * 1024 * 1024
 
-// The API key is read from settings.json here in main — the renderer never
-// sends (or needs) it.
+// The API key is decrypted from secrets.json here in main — the renderer
+// never sends (or needs) it.
 export const transcribeAudio: TranscribeAudio = async (audio) => {
     if (!(audio instanceof ArrayBuffer)) {
         return { error: 'Invalid audio payload.' }

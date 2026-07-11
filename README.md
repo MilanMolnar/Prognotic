@@ -8,16 +8,16 @@ Notes, goals, settings, encrypted credentials, and assistant history stay in `~/
 
 - Goal-based organization with Quick Notes, Research, multi-goal blocks, pinning, and goal context-menu management.
 - Chat and Natural capture modes with time-windowed appending, Markdown editing, fuzzy search, and dictation.
-- AI assistant with persistent streaming conversations, note retrieval, citations, current-goal and this-week scope.
+- AI assistant with persistent streaming conversations, relevance-ranked note retrieval, citations, goal scopes, today/week/custom dates, and per-conversation model overrides.
 - BYOK Gemini, OpenAI, Claude, and LM Studio. LM Studio offers only models currently loaded in VRAM.
 - Quick Note routing suggestions, per-goal acceptance, routing animation, and mode-aware inbox placement.
-- Translate, Explain, optional dictation cleanup, and goal rename/description/delete workflows.
+- Full-block and selected-text Translate/Explain, optional Wispr Flow dictation cleanup with retry, routing history, and goal rename/description/delete workflows.
 
 ## AI and privacy
 
 AI credentials are encrypted through Electron `safeStorage` and are never returned to the renderer after saving. All API calls and note-context assembly run in the Electron main process.
 
-One active provider/model is shared by chat, routing, inline actions, and dictation cleanup. Open Settings to configure a provider, refresh its available models, and test the active selection.
+The provider/model configured in Settings is the global default and drives routing, inline actions, and dictation cleanup. Assistant conversations can retain a model override from the selected provider. Open Settings to refresh available models and test the active selection.
 
 ## Storage
 
@@ -38,8 +38,9 @@ Run commands from `note-app/`:
 npm install
 npm run dev
 npm run typecheck
+npm test
 npm run lint
 npm run build
 ```
 
-See [note-app/README.md](./note-app/README.md) for app-specific usage, [note-app/DEVELOPER.md](./note-app/DEVELOPER.md) for architecture, and [AI_PLAN.MD](./AI_PLAN.MD) for implementation status and the remaining roadmap.
+See [note-app/README.md](./note-app/README.md) for app-specific usage, [note-app/DEVELOPER.md](./note-app/DEVELOPER.md) for architecture, [todo-prompt](./todo-prompt) for the current dictation path, and [AI_PLAN.MD](./AI_PLAN.MD) for implementation status and the remaining roadmap.

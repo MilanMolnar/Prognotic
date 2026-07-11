@@ -20,3 +20,5 @@ export * from "./FeedHeader"
 export * from "./MarkdownEditor"
 export * from "./SettingsModal"
 export * from './AiActionDialog'
+export * from './EditorAiToolbar'
+export * from './AssistantSelect'

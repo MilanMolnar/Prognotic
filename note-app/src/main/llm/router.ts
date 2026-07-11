@@ -1,34 +1,16 @@
 import { BlockMeta, LlmProvider } from '@shared/models'
-import { AssistantScope, LlmMessage, LlmModel } from '@shared/types'
+import { AssistantModelSelection, AssistantScope, LlmMessage, LlmModel } from '@shared/types'
+import { researchCategory } from '@shared/constants'
 import { getBlocks, getCredential, getGoals, getSettings, readBlock, setBlockRouting } from '@/lib'
+import { parseRoutingAssignments } from './classification'
+import { rankNoteCandidates } from './noteRanking'
+import { readSse } from './streamParser'
 
 type StreamOptions = { signal: AbortSignal; onToken: (text: string) => void }
 
 type Adapter = {
     listModels: () => Promise<LlmModel[]>
     stream: (model: string, messages: LlmMessage[], options: StreamOptions) => Promise<void>
-}
-
-const readSse = async (
-    response: Response,
-    signal: AbortSignal,
-    onData: (data: string) => void
-): Promise<void> => {
-    if (!response.body) throw new Error('The provider returned an empty stream.')
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    while (!signal.aborted) {
-        const result = await reader.read()
-        if (result.done) break
-        buffer += decoder.decode(result.value, { stream: true })
-        const events = buffer.split(/\r?\n\r?\n/)
-        buffer = events.pop() ?? ''
-        for (const event of events) {
-            const data = event.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n')
-            if (data && data !== '[DONE]') onData(data)
-        }
-    }
 }
 
 const errorFrom = async (response: Response): Promise<Error> => {
@@ -146,33 +128,109 @@ const adapterFor = async (provider: LlmProvider): Promise<Adapter> => {
     return openAiCompatible('https://api.openai.com', key)
 }
 
-const fuzzyScore = (query: string, text: string): number => {
-    const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length > 1)
-    return terms.reduce((score, term) => score + (text.toLowerCase().includes(term) ? term.length : 0), 0)
+const resolveSelection = async (selection?: AssistantModelSelection): Promise<AssistantModelSelection> => {
+    if (selection?.model.trim()) return { provider: selection.provider, model: selection.model.trim() }
+    const settings = await getSettings()
+    if (!settings.llm.model) throw new Error('Choose and test an AI model in Settings first.')
+    return { provider: settings.llm.provider, model: settings.llm.model }
 }
 
-export const buildNotesContext = async (message: string, scope: AssistantScope): Promise<{ prompt: string; citedIds: string[] }> => {
+const collectWith = async (selection: AssistantModelSelection, messages: LlmMessage[], signal: AbortSignal): Promise<string> => {
+    let text = ''
+    await (await adapterFor(selection.provider)).stream(selection.model, messages, { signal, onToken: (token) => { text += token } })
+    return text.trim()
+}
+
+type ResolvedGoalScope = { goalIds?: string[]; readGoalLabels: string[] }
+
+const resolveGoalScope = async (
+    message: string,
+    scope: AssistantScope,
+    selection: AssistantModelSelection,
+    signal: AbortSignal
+): Promise<ResolvedGoalScope> => {
+    const goals = await getGoals()
+    const goalNames = new Map(goals.map((goal) => [goal.id, goal.name]))
+    goalNames.set(researchCategory, 'Research')
+
+    if (scope.goalMode === 'open') {
+        const goalId = scope.openGoalId ?? null
+        return {
+            goalIds: goalId === null ? [] : [goalId],
+            readGoalLabels: [goalId === null ? 'Quick Notes' : (goalNames.get(goalId) ?? 'Currently open goal')]
+        }
+    }
+    if (scope.goalMode === 'all') return { readGoalLabels: ['All goals'] }
+
+    const candidates = [
+        ...goals.map((goal) => ({ id: goal.id, name: goal.name, description: goal.description })),
+        { id: researchCategory, name: 'Research', description: 'Research notes, sources, and reference material.' }
+    ]
+    const validIds = new Set(candidates.map((goal) => goal.id))
+    const suppliedIds = (scope.goalIds ?? []).filter((id) => validIds.has(id))
+    if (suppliedIds.length > 0) {
+        return { goalIds: suppliedIds, readGoalLabels: suppliedIds.map((id) => goalNames.get(id) ?? id) }
+    }
+    if (candidates.length === 0) return { readGoalLabels: ['All goals'] }
+
+    try {
+        const raw = await collectWith(selection, [
+            { role: 'system', content: 'Select every goal relevant to the user question. Compare the question with each goal name and description, prioritize specific domain evidence, and do not select broad names from generic words alone. Return only JSON: {"goalIds":["listed-id"]}. Never invent ids.' },
+            { role: 'user', content: JSON.stringify({ goals: candidates, question: message }) }
+        ], signal)
+        const parsed = JSON.parse(raw.replace(/^```json\s*|```$/g, '')) as { goalIds?: string[] }
+        const goalIds = [...new Set((parsed.goalIds ?? []).filter((id) => validIds.has(id)))]
+        if (goalIds.length === 0) throw new Error('No relevant goals were selected.')
+        return { goalIds, readGoalLabels: goalIds.map((id) => goalNames.get(id) ?? id) }
+    } catch (error) {
+        if (signal.aborted) throw error
+        // Relevance selection must never turn a provider-formatting failure
+        // into an empty answer. Fall back to all goals and disclose it.
+        return { readGoalLabels: ['All goals (relevance fallback)'] }
+    }
+}
+
+const maxNotesContextChars = 60_000
+const maxSingleNoteChars = 6_000
+
+export const buildNotesContext = async (
+    message: string,
+    scope: AssistantScope,
+    selection?: AssistantModelSelection,
+    signal = new AbortController().signal
+): Promise<{ prompt: string; citedIds: string[]; readGoalLabels: string[] }> => {
+    const activeSelection = await resolveSelection(selection)
     const [blocks, goals] = await Promise.all([getBlocks(), getGoals()])
-    const scoped = blocks.filter((block) =>
-        (scope.goalId === undefined || scope.goalId === null || block.categories.includes(scope.goalId)) &&
+    const resolvedGoals = await resolveGoalScope(message, scope, activeSelection, signal)
+    const scopedBlocks = blocks.filter((block) =>
+        (scope.goalMode === 'all' || resolvedGoals.goalIds === undefined ||
+            (scope.goalMode === 'open' && resolvedGoals.goalIds.length === 0 ? block.categories.includes(null) : resolvedGoals.goalIds.some((id) => block.categories.includes(id)))) &&
         (scope.from === undefined || block.updatedAt >= scope.from) &&
         (scope.to === undefined || block.updatedAt <= scope.to)
     )
-    const ranked = scoped.map((block) => ({ block, score: fuzzyScore(message, block.excerpt) + block.updatedAt / 1e14 }))
-        .sort((a, b) => b.score - a.score).slice(0, 8)
+    const candidates = await Promise.all(scopedBlocks.map(async (block) => ({
+        block,
+        content: (await readBlock(block.id)).content.trim()
+    })))
+    const ranked = rankNoteCandidates(message, candidates.filter((candidate) => candidate.content.length > 0))
     let size = 0
     const excerpts: string[] = []
     const citedIds: string[] = []
-    for (const { block } of ranked) {
-        const content = (await readBlock(block.id)).content.trim()
-        const excerpt = content.slice(0, 1800)
-        if (!excerpt || size + excerpt.length > 10000) continue
-        size += excerpt.length
+    for (const { block, content } of ranked) {
+        const excerpt = content.slice(0, maxSingleNoteChars)
+        const entry = `[block:${block.id}] ${block.excerpt}\n${excerpt}`
+        if (size + entry.length > maxNotesContextChars) break
+        size += entry.length
         citedIds.push(block.id)
-        excerpts.push(`[block:${block.id}] ${block.excerpt}\n${excerpt}`)
+        excerpts.push(entry)
     }
-    const goalContext = goals.map((goal) => `${goal.id}: ${goal.name}${goal.description ? ` - ${goal.description}` : ''}`).join('\n')
-    return { citedIds, prompt: `You are Prognotic's note assistant. Use the supplied notes when relevant. Never invent a note citation. Cite a note with exactly [block:UUID] immediately after the supported claim. If the notes do not answer the question, say so.\n\nGoals:\n${goalContext || '(none)'}\n\nNotes:\n${excerpts.join('\n\n') || '(no matching notes)'}` }
+    const goalContext = goals.map((goal) => `${goal.id}: ${goal.name}${goal.description ? ` - ${goal.description}` : ''}${goal.routingHints ? `; routing hints: ${goal.routingHints}` : ''}`).join('\n')
+    const disclosure = resolvedGoals.readGoalLabels.join(', ')
+    return {
+        citedIds,
+        readGoalLabels: resolvedGoals.readGoalLabels,
+        prompt: `You are Prognotic's note assistant. Begin every answer with exactly "Read notes from: ${disclosure}" on its own line. Use the supplied notes when relevant. Never invent a note citation. Cite a note with exactly [block:UUID] immediately after the supported claim. If the notes do not answer the question, say so.\n\nGoals:\n${goalContext || '(none)'}\n\nNotes:\n${excerpts.join('\n\n') || '(no matching notes)'}`
+    }
 }
 
 export const listModels = async (provider: LlmProvider): Promise<LlmModel[]> => (await adapterFor(provider)).listModels()
@@ -189,21 +247,17 @@ export const testConnection = async (): Promise<void> => {
     } finally { clearTimeout(timeout) }
 }
 
-export const streamAssistant = async (message: string, history: LlmMessage[], scope: AssistantScope, options: StreamOptions): Promise<string[]> => {
-    const settings = await getSettings()
-    if (!settings.llm.model) throw new Error('Choose and test an AI model in Settings first.')
-    const context = await buildNotesContext(message, scope)
-    await (await adapterFor(settings.llm.provider)).stream(settings.llm.model, [{ role: 'system', content: context.prompt }, ...history, { role: 'user', content: message }], options)
-    return context.citedIds
+export const streamAssistant = async (message: string, history: LlmMessage[], scope: AssistantScope, selection: AssistantModelSelection | undefined, options: StreamOptions): Promise<{ citedBlockIds: string[]; readGoalLabels: string[] }> => {
+    const activeSelection = await resolveSelection(selection)
+    const context = await buildNotesContext(message, scope, activeSelection, options.signal)
+    await (await adapterFor(activeSelection.provider)).stream(activeSelection.model, [{ role: 'system', content: context.prompt }, ...history, { role: 'user', content: message }], options)
+    return { citedBlockIds: context.citedIds, readGoalLabels: context.readGoalLabels }
 }
 
 const collect = async (messages: LlmMessage[]): Promise<string> => {
-    const settings = await getSettings()
-    if (!settings.llm.model) throw new Error('Choose and test an AI model in Settings first.')
+    const selection = await resolveSelection()
     const controller = new AbortController()
-    let text = ''
-    await (await adapterFor(settings.llm.provider)).stream(settings.llm.model, messages, { signal: controller.signal, onToken: (token) => { text += token } })
-    return text.trim()
+    return collectWith(selection, messages, controller.signal)
 }
 
 export const runInlineAction = async (action: 'translate' | 'explain', text: string, blockId?: string): Promise<string> => {
@@ -219,36 +273,11 @@ export const polishTranscript = async (text: string): Promise<string> => collect
     { role: 'user', content: text }
 ])
 
-const fallbackGoalId = (note: string, goals: Awaited<ReturnType<typeof getGoals>>): string | null => {
-    const words = new Set(note.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [])
-    let best = goals[0] ?? null
-    let bestScore = -1
-    for (const goal of goals) {
-        const score = (goal.name + ' ' + goal.description).toLowerCase().match(/[a-z0-9]{3,}/g)?.reduce(
-            (total, word) => total + (words.has(word) ? 1 : 0),
-            0
-        ) ?? 0
-        if (score > bestScore) {
-            best = goal
-            bestScore = score
-        }
-    }
-    return best?.id ?? null
-}
-
 export const classifyBlock = async (blockId: string): Promise<BlockMeta | null> => {
     const [content, goals, settings] = await Promise.all([readBlock(blockId), getGoals(), getSettings()])
     if (!content.content.trim() || !settings.llm.model || goals.length === 0) return null
-    const goalList = goals.map((goal) => ({ id: goal.id, name: goal.name, description: goal.description }))
+    const goalList = goals.map((goal) => ({ id: goal.id, name: goal.name, description: goal.description, routingHints: goal.routingHints }))
     const raw = await collect([{ role: 'system', content: 'Classify the note against the listed goals. You must assign at least one listed goal: choose the most likely goal even when wording is indirect. Compare the note to each goal description and prioritize specific domain evidence over generic action words. A broad goal name alone is not evidence; for example, words such as work, review, task, code, or plan do not imply an employment goal without domain evidence from that goal description. You may add other relevant goals. Return only JSON: {"assignments":[{"goalId":"listed-id","confidence":0-to-1}]}. Never return an empty array or invent goal ids.' }, { role: 'user', content: JSON.stringify({ goals: goalList, note: content.content.slice(0, 6000) }) }])
-    const parsed = JSON.parse(raw.replace(/^```json\s*|```$/g, '')) as { assignments?: { goalId?: string | null; confidence?: number }[] }
-    const validIds = new Set(goals.map((goal) => goal.id))
-    const assignments = (parsed.assignments ?? [])
-        .filter((item): item is { goalId: string; confidence?: number } => typeof item.goalId === 'string' && validIds.has(item.goalId))
-        .map((item) => ({ goalId: item.goalId, confidence: Math.max(0, Math.min(1, Number(item.confidence) || 0)) }))
-    if (assignments.length === 0) {
-        const goalId = fallbackGoalId(content.content, goals)
-        if (goalId) assignments.push({ goalId, confidence: 0.1 })
-    }
+    const assignments = parseRoutingAssignments(raw, content.content, goals)
     return setBlockRouting(blockId, { status: 'pending', decidedAt: Date.now(), assignments, model: `${settings.llm.provider}:${settings.llm.model}` })
 }

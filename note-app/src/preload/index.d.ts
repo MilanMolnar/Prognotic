@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { AppendToBlock, ApplyBlockRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, OnAssistantStreamEvent, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, OnAssistantStreamEvent, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
 
 declare global {
   interface Window {
@@ -13,6 +13,7 @@ declare global {
       createBlock: CreateBlock
       updateBlockCategories: UpdateBlockCategories
       applyBlockRouting: ApplyBlockRouting
+      acknowledgeBlockInGoal: AcknowledgeBlockInGoal
       appendToBlock: AppendToBlock
       deleteBlock: DeleteBlock
       deleteBlockIfEmpty: DeleteBlockIfEmpty

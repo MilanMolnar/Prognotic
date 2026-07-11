@@ -22,6 +22,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
     const [openBlockId, setOpenBlockId] = useState<string | null>(null)
     const [contentVersion, setContentVersion] = useState(0)
+    const [routingErrors, setRoutingErrors] = useState<Record<string, string>>({})
+    const [routingInProgressIds, setRoutingInProgressIds] = useState<Set<string>>(() => new Set())
 
     const { settings } = useSettings()
     const { selectedCategory } = useGoals()
@@ -140,9 +142,33 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     const classifyQuickNote = useCallback(async (id: string) => {
         const block = blocksRef.current?.find((item) => item.id === id)
         if (!block?.categories.includes(null)) return
-        const updated = await window.context.classifyBlock(id)
-        if (!updated) return
-        setBlocks((prev) => prev?.map((item) => item.id === updated.id ? updated : item))
+        setRoutingErrors((previous) => {
+            const next = { ...previous }
+            delete next[id]
+            return next
+        })
+        setRoutingInProgressIds((previous) => new Set(previous).add(id))
+        try {
+            const result = await window.context.classifyBlock(id)
+            if (result.error) {
+                setRoutingErrors((previous) => ({ ...previous, [id]: result.error as string }))
+                return
+            }
+            const updated = result.block
+            if (!updated) return
+            setBlocks((prev) => prev?.map((item) => item.id === updated.id ? updated : item))
+        } catch (error) {
+            setRoutingErrors((previous) => ({
+                ...previous,
+                [id]: error instanceof Error ? error.message : 'Could not classify this note.'
+            }))
+        } finally {
+            setRoutingInProgressIds((previous) => {
+                const next = new Set(previous)
+                next.delete(id)
+                return next
+            })
+        }
     }, [])
 
     // Close the open block once its idle window elapses. Every write bumps
@@ -296,6 +322,18 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         const updatedMeta = await window.context.applyBlockRouting(id, goalId)
         if (!updatedMeta) return false
         setBlocks((prev) => prev?.map((block) => (block.id === updatedMeta.id ? updatedMeta : block)))
+        setRoutingErrors((previous) => {
+            const next = { ...previous }
+            delete next[id]
+            return next
+        })
+        return true
+    }, [])
+
+    const acknowledgeBlockInGoal = useCallback(async (id: string, goalId: string): Promise<boolean> => {
+        const updatedMeta = await window.context.acknowledgeBlockInGoal(id, goalId)
+        if (!updatedMeta) return false
+        setBlocks((previous) => previous?.map((block) => block.id === updatedMeta.id ? updatedMeta : block))
         return true
     }, [])
 
@@ -334,14 +372,16 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
             selectedBlockId,
             selectedBlock,
             openBlockId,
+            routingErrors,
+            routingInProgressIds,
             contentVersion
         }),
-        [blocks, blockContents, selectedBlockId, selectedBlock, openBlockId, contentVersion]
+        [blocks, blockContents, selectedBlockId, selectedBlock, openBlockId, routingErrors, routingInProgressIds, contentVersion]
     )
 
     const actionsValue: BlocksActions = useMemo(
-        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, classifyBlock: classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
-        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
+        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, acknowledgeBlockInGoal, classifyBlock: classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
+        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, acknowledgeBlockInGoal, classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
     )
 
     return (

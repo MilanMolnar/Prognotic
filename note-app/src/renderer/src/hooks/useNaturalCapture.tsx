@@ -33,7 +33,7 @@ export const useNaturalCapture = ({
     category
 }: UseNaturalCaptureParams): UseNaturalCaptureResult => {
     const { openBlockId } = useBlocks()
-    const { updateBlockContent, createCaptureBlock, cleanupBlockIfEmpty, closeOpenBlock } =
+    const { updateBlockContent, createCaptureBlock, cleanupBlockIfEmpty, closeOpenBlock, classifyBlock } =
         useBlockActions()
 
     const editorRef = useRef<MDXEditorMethods>(null)
@@ -165,17 +165,20 @@ export const useNaturalCapture = ({
         latestRef.current = null
         savedRef.current = ''
         const finalContent = pending ?? saved
-        if (finalContent.trim().length === 0) {
-            queueRef.current = queueRef.current
-                .then(() => cleanupBlockIfEmpty(sessionId))
-                .catch(() => undefined)
-        } else if (pending !== null && pending !== saved) {
-            queueRef.current = queueRef.current
-                .then(() => updateBlockContent(sessionId, { content: pending }))
-                .catch(() => undefined)
-        }
+        queueRef.current = queueRef.current
+            .then(async () => {
+                if (finalContent.trim().length === 0) {
+                    await cleanupBlockIfEmpty(sessionId)
+                    return
+                }
+                if (pending !== null && pending !== saved) {
+                    await updateBlockContent(sessionId, { content: pending })
+                }
+                await classifyBlock(sessionId)
+            })
+            .catch(() => undefined)
         editorRef.current?.setMarkdown('')
-    }, [openBlockId, updateBlockContent, cleanupBlockIfEmpty])
+    }, [openBlockId, updateBlockContent, cleanupBlockIfEmpty, classifyBlock])
 
     // Flush unsaved text before the surface goes away (mode or category
     // switch, or a block opened for editing) — or, if the session block was

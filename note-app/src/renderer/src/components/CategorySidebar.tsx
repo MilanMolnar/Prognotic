@@ -2,6 +2,7 @@ import { ActionButton, GoalContextMenu, GoalDialog, NewGoalButton, SettingsButto
 import {
   CategoryKey,
   useBlockActions,
+  useBlocks,
   useGoalActions,
   useGoals,
   usePanelActions,
@@ -12,6 +13,7 @@ import {
 } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { maxPinnedGoals, researchCategory } from '@shared/constants'
+import { countUnvisitedBlocksForGoal } from '@shared/goalPresence'
 import { Goal } from '@shared/models'
 import {
   ComponentProps,
@@ -25,7 +27,7 @@ import {
   useRef,
   useState
 } from 'react'
-import { LuPanelLeftClose, LuPin, LuSearch } from 'react-icons/lu'
+import { LuBookOpen, LuPanelLeftClose, LuPin, LuSearch, LuStickyNote } from 'react-icons/lu'
 
 const categoryId = (key: CategoryKey): string => key ?? 'quick-notes'
 const goalSearchId = '__goal-search__'
@@ -75,11 +77,20 @@ type SystemButtonProps = {
   onClick: () => void
   itemRef: (element: HTMLElement | null) => void
   categoryRowId: string
+  leading: ReactNode
 }
 
-const SystemItem = ({ label, onClick, itemRef, categoryRowId }: SystemButtonProps): JSX.Element => (
-  <SelectableItem label={label} onClick={onClick} itemRef={itemRef} categoryRowId={categoryRowId} />
+const SystemItem = ({ label, onClick, itemRef, categoryRowId, leading }: SystemButtonProps): JSX.Element => (
+  <SelectableItem
+    label={label}
+    onClick={onClick}
+    itemRef={itemRef}
+    categoryRowId={categoryRowId}
+    leading={leading}
+  />
 )
+
+const systemGoalIconClass = 'h-4 w-4 shrink-0 text-zinc-400'
 
 const SectionLabel = ({ children }: { children: string }): JSX.Element => (
   <div className="relative z-10 mb-1 mt-3 px-2.5 text-xs uppercase tracking-wide text-zinc-500">{children}</div>
@@ -87,6 +98,7 @@ const SectionLabel = ({ children }: { children: string }): JSX.Element => (
 
 export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>): JSX.Element => {
   const { goals, selectedCategory } = useGoals()
+  const { blocks } = useBlocks()
   const { selectCategory, deleteGoal } = useGoalActions()
   const { selectBlock } = useBlockActions()
   const { closeSearch } = useSearchActions()
@@ -159,6 +171,23 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     trimmedSearch.length === 0 || name.toLowerCase().includes(trimmedSearch)
 
   const visibleUnpinnedGoals = unpinnedGoals.filter((goal) => matchesGoalName(goal.name))
+  const unvisitedCounts = useMemo(() => new Map(
+    (goals ?? []).map((goal) => [goal.id, countUnvisitedBlocksForGoal(blocks, goal.id)])
+  ), [blocks, goals])
+
+  const counterFor = (goalId: string): ReactNode => {
+    const count = unvisitedCounts.get(goalId) ?? 0
+    if (count === 0) return undefined
+    return <button
+      type="button"
+      title={`${count} unvisited ${count === 1 ? 'note' : 'notes'}`}
+      aria-label={`${count} unvisited ${count === 1 ? 'note' : 'notes'}`}
+      onClick={(event) => event.stopPropagation()}
+      className="min-w-5 shrink-0 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-center text-[10px] font-medium leading-none text-yellow-400"
+    >
+      {count}
+    </button>
+  }
 
   useLayoutEffect(() => {
     const frame = requestAnimationFrame(updateIndicator)
@@ -229,7 +258,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     if (!contextGoal) return
     const { goal } = contextGoal
     setContextGoal(null)
-    if (!window.confirm(`Delete the goal "${goal.name}"? Its notes will remain in Quick Notes.`)) return
+    if (!window.confirm(`Delete the goal "${goal.name}"? Blocks keep their other categories; uncategorized blocks return to Quick Notes.`)) return
     await deleteGoal(goal.id)
   }
 
@@ -296,12 +325,14 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             itemRef={registerItemRef(null)}
             categoryRowId={categoryId(null)}
             onClick={handleCategorySelect(null)}
+            leading={<LuStickyNote className={systemGoalIconClass} aria-hidden />}
           />
           <SystemItem
             label="Research"
             itemRef={registerItemRef(researchCategory)}
             categoryRowId={categoryId(researchCategory)}
             onClick={handleCategorySelect(researchCategory)}
+            leading={<LuBookOpen className={systemGoalIconClass} aria-hidden />}
           />
         </ul>
 
@@ -327,6 +358,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                       <LuPin className="h-3 w-3 text-yellow-500" />
                     </button>
                   }
+                  trailing={counterFor(goal.id)}
                 />
               ))}
             </ul>
@@ -343,18 +375,18 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               categoryRowId={categoryId(goal.id)}
               onClick={handleCategorySelect(goal.id)}
               onContextMenu={handleGoalContextMenu(goal)}
-              trailing={
-                canPinMore ? (
-                  <button
-                    type="button"
-                    title="Pin goal"
-                    onClick={handlePinClick(goal.id)}
-                    className="shrink-0 rounded p-0.5 hover:bg-zinc-600/50"
-                  >
-                    <LuPin className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
-                  </button>
-                ) : undefined
+              leading={
+                <button
+                  type="button"
+                  title={canPinMore ? 'Pin goal' : `Pin limit reached (${maxPinnedGoals})`}
+                  disabled={!canPinMore}
+                  onClick={handlePinClick(goal.id)}
+                  className="shrink-0 rounded p-0.5 hover:bg-zinc-600/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <LuPin className="h-3 w-3 text-zinc-600 hover:text-zinc-400" />
+                </button>
               }
+              trailing={counterFor(goal.id)}
             />
           ))}
           {goals && visibleUnpinnedGoals.length === 0 && (

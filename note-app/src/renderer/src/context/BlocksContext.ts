@@ -11,6 +11,8 @@ export type BlocksState = {
     selectedBlockId: string | null
     selectedBlock: SelectedBlock | null
     openBlockId: string | null
+    routingErrors: Readonly<Record<string, string>>
+    routingInProgressIds: ReadonlySet<string>
     // Bumped when a quick-input append touches the selected block so the
     // editor remounts with the appended content.
     contentVersion: number
@@ -28,6 +30,7 @@ export type BlocksActions = {
     // Multi-goal plumbing: replaces the block's full category list.
     updateBlockCategories: (id: string, categories: (string | null)[]) => Promise<void>
     applyBlockRouting: (id: string, goalId: string) => Promise<boolean>
+    acknowledgeBlockInGoal: (id: string, goalId: string) => Promise<boolean>
     classifyBlock: (id: string) => Promise<void>
     // Silent delete for blocks left blank — no confirmation dialog; the
     // emptiness check is atomic in the main process.

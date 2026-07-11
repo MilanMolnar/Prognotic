@@ -13,8 +13,8 @@ export type GoalsState = {
 
 export type GoalsActions = {
     selectCategory: (key: CategoryKey) => void
-    createGoal: (name: string, description: string) => Promise<void>
-    renameGoal: (id: string, name: string, description: string) => Promise<void>
+    createGoal: (name: string, description: string, routingHints?: string) => Promise<void>
+    renameGoal: (id: string, name: string, description: string, routingHints?: string) => Promise<void>
     deleteGoal: (id: string) => Promise<void>
 }
 

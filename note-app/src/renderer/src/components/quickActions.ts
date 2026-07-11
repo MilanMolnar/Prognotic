@@ -1,7 +1,6 @@
 // Quick actions offered on a block's right-click menu. Kept as a
 // configurable list so a future settings UI can let users edit their own
-// quick LLM actions; the defaults below are hardcoded for now and the
-// handlers are stubs until the assistant is wired up.
+// quick LLM actions; the defaults below are hardcoded for now.
 export type QuickAction = {
   id: string
   label: string

@@ -4,6 +4,7 @@ import { researchCategory } from '@shared/constants'
 import { BlockMeta } from '@shared/models'
 import { JSX, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { showBlockToast } from './blockToast'
 import { defaultQuickActions, QuickAction } from './quickActions'
 
 export type BlockContextMenuProps = {
@@ -67,31 +68,6 @@ const flyLabelToCategoryRow = (
 // Right-click menu for a block card. Rendered in a portal so the fixed
 // cursor position escapes the feed's scroll container. Dismissed by choosing
 // an item, clicking anywhere outside, or Escape.
-// Subtle bottom-center notice, same transient DOM + WAAPI approach as the
-// flight: fades in, holds briefly, fades out and removes itself. A new
-// toast replaces any visible one instead of stacking.
-const showToast = (message: string): void => {
-  document.querySelector('[data-block-toast]')?.remove()
-
-  const toast = document.createElement('div')
-  toast.textContent = message
-  toast.setAttribute('data-block-toast', '')
-  toast.className =
-    'pointer-events-none fixed bottom-6 left-1/2 z-50 rounded-md border border-zinc-700 bg-zinc-900/95 px-3 py-1.5 text-xs text-zinc-300 shadow-xl'
-  document.body.appendChild(toast)
-
-  const appearance = toast.animate(
-    [
-      { opacity: 0, transform: 'translate(-50%, 8px)' },
-      { opacity: 1, transform: 'translate(-50%, 0)', offset: 0.08 },
-      { opacity: 1, transform: 'translate(-50%, 0)', offset: 0.85 },
-      { opacity: 0, transform: 'translate(-50%, 4px)' }
-    ],
-    { duration: 2400, easing: 'ease-out' }
-  )
-  appearance.onfinish = (): void => toast.remove()
-}
-
 export const BlockContextMenu = ({ block, position, onClose, onAiAction }: BlockContextMenuProps): JSX.Element => {
   const menuRef = useRef<HTMLDivElement>(null)
   const { updateBlockCategories, classifyBlock } = useBlockActions()
@@ -119,7 +95,7 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
   const handleAction = (action: QuickAction) => (): void => {
     if (action.id === 'send-to-research') {
       if (block.categories.includes(researchCategory)) {
-        showToast('Already in Research')
+        showBlockToast('Already in Research')
       } else {
         // Research joins the block's categories (multi-goal — the single
         // .md file is untouched), with a flight to the sidebar row showing
@@ -129,7 +105,6 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
       }
     } else {
       onAiAction(action.id as 'translate' | 'explain')
-      // Stubs — no LLM call yet; future work routes these through the assistant.
     }
     onClose()
   }

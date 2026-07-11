@@ -2,6 +2,7 @@ import { MDXEditor } from '@mdxeditor/editor'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
 import { useNaturalCapture, UseNaturalCaptureParams } from '@renderer/hooks/useNaturalCapture'
 import { useSettings } from '@renderer/context'
+import { useTranscriptPolish } from '@renderer/hooks/useTranscriptPolish'
 import { cn } from '@renderer/utils'
 import { JSX, useCallback, useState } from 'react'
 import { DictationButton } from './DictationButton'
@@ -28,15 +29,12 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
     [handleChange]
   )
 
-  const handleTranscript = useCallback(
-    async (text: string): Promise<void> => {
-      const result = settings.llm.polishDictation ? await window.context.polishTranscript(text) : { text }
-      const next = 'text' in result && result.text ? result.text : text
-      appendTranscript(next)
-      if (next.trim().length > 0) setIsEmpty(false)
-    },
-    [appendTranscript, settings.llm.polishDictation]
-  )
+  const acceptPolishedTranscript = useCallback((text: string): void => {
+    appendTranscript(text)
+    if (text.trim().length > 0) setIsEmpty(false)
+  }, [appendTranscript])
+  const { acceptTranscript, retryPolish, useOriginal, polishError, isPolishing, hasPendingTranscript } =
+    useTranscriptPolish({ enabled: settings.llm.polishDictation, onAccepted: acceptPolishedTranscript })
 
   const focusEditor = useCallback((): void => {
     const editable = document.querySelector(
@@ -46,9 +44,9 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
   }, [])
 
   const { dictationMode, isListening, interimText, error, notice, isAvailable, toggle } =
-    useDictation({ onFinalTranscript: (text) => { void handleTranscript(text) }, focusInput: focusEditor })
+    useDictation({ onFinalTranscript: (text) => { void acceptTranscript(text) }, focusInput: focusEditor })
 
-  const statusMessage = error ?? notice ?? (isListening && interimText ? interimText : null)
+  const statusMessage = polishError ?? (isPolishing ? 'Polishing transcript...' : error ?? notice ?? (isListening && interimText ? interimText : null))
 
   return (
     <div className="flex items-end gap-1 px-1">
@@ -64,15 +62,10 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
       </div>
       <div className="flex shrink-0 items-center gap-2 pb-0.5">
         {statusMessage && (
-          <p
-            className={cn(
-              'max-w-[10rem] truncate text-xs sm:max-w-[14rem]',
-              error ? 'text-red-400/90' : notice ? 'text-zinc-500' : 'text-zinc-500 italic'
-            )}
-            aria-live="polite"
-          >
-            {statusMessage}
-          </p>
+          <div className="flex items-center gap-1 text-xs" aria-live="polite">
+            <span className={cn('max-w-[10rem] truncate sm:max-w-[14rem]', polishError || error ? 'text-red-400/90' : notice || isPolishing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage}</span>
+            {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">Use original</button></>}
+          </div>
         )}
         <DictationButton
           isListening={isListening}

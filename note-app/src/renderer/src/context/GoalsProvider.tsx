@@ -36,14 +36,14 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         setSelectedCategory(key)
     }, [])
 
-    const createGoal = useCallback(async (name: string, description: string) => {
-        const goal = await window.context.createGoal(name, description)
+    const createGoal = useCallback(async (name: string, description: string, routingHints = '') => {
+        const goal = await window.context.createGoal(name, description, routingHints)
         setGoals((prev) => (prev ? [...prev, goal] : [goal]))
         setSelectedCategory(goal.id)
     }, [])
 
-    const renameGoal = useCallback(async (id: string, name: string, description: string) => {
-        const renamed = await window.context.renameGoal(id, name, description)
+    const renameGoal = useCallback(async (id: string, name: string, description: string, routingHints = '') => {
+        const renamed = await window.context.renameGoal(id, name, description, routingHints)
         if (!renamed) return
         setGoals((prev) => prev?.map((goal) => goal.id === id ? renamed : goal))
     }, [])

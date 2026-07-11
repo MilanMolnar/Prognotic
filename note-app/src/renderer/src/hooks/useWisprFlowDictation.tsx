@@ -76,7 +76,7 @@ const toWav16kMono = async (blob: Blob): Promise<ArrayBuffer> => {
 
 // Wispr Flow (wisprflow.ai) dictation — push-to-talk recording in the
 // renderer, transcription by main via the Wispr Flow developer API (the key
-// lives in settings, read only by main). Not OpenAI Whisper.
+// lives in the encrypted credential store, read only by main). Not OpenAI Whisper.
 export const useWisprFlowDictation = ({
     onFinalTranscript,
     hasApiKey

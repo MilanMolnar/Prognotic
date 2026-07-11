@@ -1,3 +1,17 @@
+export type BlockRouting = {
+    status: 'pending' | 'applied' | 'overridden'
+    decidedAt: number
+    assignments: { goalId: string | null; confidence: number }[]
+    model: string
+}
+
+export type GoalPresenceSource = 'user' | 'routed' | 'assistant' | 'research'
+
+export type GoalPresence = {
+    source: GoalPresenceSource
+    visited: boolean
+}
+
 export type BlockMeta = {
     id: string
     file: string
@@ -8,12 +22,11 @@ export type BlockMeta = {
     // block regardless of how many categories list it.
     categories: (string | null)[]
     excerpt: string
-    routing?: {
-        status: 'pending' | 'applied' | 'overridden'
-        decidedAt: number
-        assignments: { goalId: string | null; confidence: number }[]
-        model: string
-    }
+    // Per-category provenance and acknowledgement. Missing legacy entries
+    // are treated as already seen, so migrations never create false badges.
+    goalPresence?: Record<string, GoalPresence>
+    routing?: BlockRouting
+    routingHistory?: BlockRouting[]
 }
 
 export type NoteContent = {
@@ -26,6 +39,7 @@ export type Goal = {
     id: string
     name: string
     description: string
+    routingHints?: string
     createdAt: number
 }
 
@@ -52,9 +66,6 @@ export type AppSettings = {
     pinnedGoalIds: string[]
     captureMode: CaptureMode
     dictationMode: DictationMode
-    // Wispr Flow developer API key (platform.wisprflow.ai). Persisted here
-    // but only ever read by the main process when transcribing — it never
-    // travels over IPC.
     llm: LlmSettings
     hasWhisprflowApiKey: boolean
     hasGeminiApiKey: boolean
@@ -73,7 +84,11 @@ export type AssistantMessage = {
     provider?: LlmProvider
     model?: string
     citedBlockIds?: string[]
+    readGoalLabels?: string[]
 }
+
+export type AssistantGoalMode = 'open' | 'all' | 'relevant'
+export type AssistantTimeRange = 'today' | 'week' | 'custom'
 
 export type AssistantConversation = {
     id: string
@@ -81,4 +96,12 @@ export type AssistantConversation = {
     createdAt: number
     updatedAt: number
     messages: AssistantMessage[]
+    goalMode?: AssistantGoalMode
+    timeRange?: AssistantTimeRange
+    customStartDate?: string
+    customEndDate?: string
+    provider?: LlmProvider
+    model?: string
+    usesDefaultModel?: boolean
+    readGoalLabels?: string[]
 }

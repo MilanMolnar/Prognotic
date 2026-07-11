@@ -1,6 +1,7 @@
 import { DictationButton } from '@renderer/components/DictationButton'
 import { MarkdownFormat, useQuickInput } from '@renderer/hooks/useQuickInput'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
+import { useTranscriptPolish } from '@renderer/hooks/useTranscriptPolish'
 import { useBlockActions, useBlocks, useGoals, useSettings } from '@renderer/context'
 import { blockLabel, cn } from '@renderer/utils'
 import { ComponentProps, JSX, useCallback, useEffect } from 'react'
@@ -34,14 +35,11 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
     textareaRef.current?.focus()
   }, [textareaRef])
 
-  const handleTranscript = useCallback(async (text: string): Promise<void> => {
-    if (!settings.llm.polishDictation) { appendTranscript(text); return }
-    const result = await window.context.polishTranscript(text)
-    appendTranscript('text' in result && result.text ? result.text : text)
-  }, [appendTranscript, settings.llm.polishDictation])
+  const { acceptTranscript, retryPolish, useOriginal, polishError, isPolishing, hasPendingTranscript } =
+    useTranscriptPolish({ enabled: settings.llm.polishDictation, onAccepted: appendTranscript })
 
   const { dictationMode, isListening, interimText, error, notice, isAvailable, toggle, stop } =
-    useDictation({ onFinalTranscript: (text) => { void handleTranscript(text) }, focusInput: focusCaptureInput })
+    useDictation({ onFinalTranscript: (text) => { void acceptTranscript(text) }, focusInput: focusCaptureInput })
 
   // Stop dictation when the bar becomes inert or the draft is sent.
   useEffect(() => {
@@ -59,7 +57,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   const appendTarget =
     openTarget && openTarget.categories.includes(selectedCategory) ? openTarget : undefined
 
-  const statusMessage = error ?? notice
+  const statusMessage = polishError ?? (isPolishing ? 'Polishing transcript...' : error ?? notice)
 
   return (
     <form
@@ -115,15 +113,10 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
           </button>
         </div>
         {(isListening && interimText) || statusMessage ? (
-          <p
-            className={cn(
-              'px-3 pt-0.5 text-xs',
-              error ? 'text-red-400/90' : notice ? 'text-zinc-500' : 'text-zinc-500 italic'
-            )}
-            aria-live="polite"
-          >
-            {error ?? notice ?? interimText}
-          </p>
+          <div className="flex items-center gap-2 px-3 pt-0.5 text-xs" aria-live="polite">
+            <span className={cn(polishError || error ? 'text-red-400/90' : notice || isPolishing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage ?? interimText}</span>
+            {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">Use original</button></>}
+          </div>
         ) : null}
         <textarea
           ref={textareaRef}

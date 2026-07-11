@@ -1,7 +1,7 @@
 import { MDXEditorMethods } from "@mdxeditor/editor";
 import { SelectedBlock, useBlockActions, useBlocks } from "@renderer/context";
 import { NoteContent } from "@shared/models";
-import { RefObject, useRef } from "react";
+import { RefObject, useEffect, useMemo, useRef } from "react";
 import { throttle, DebouncedFuncLeading } from "lodash"
 import { autoSavingTime } from "@shared/constants";
 
@@ -17,23 +17,22 @@ export const useMarkdownEditor = (): UseMarkdownEditorResult => {
     const { selectedBlock, contentVersion } = useBlocks();
     const { saveBlock } = useBlockActions()
     const editorRef = useRef<MDXEditorMethods>(null)
+    const selectedBlockId = selectedBlock?.id ?? null
 
     // contentVersion bumps when a quick-input append touches the selected
     // block, remounting the editor with the appended content.
     const editorKey = selectedBlock ? `${selectedBlock.id}:${contentVersion}` : ''
 
-    const handleAutoSaving = throttle( async (content: string | NoteContent) =>{
-        if (!selectedBlock) return
-
-        console.log('auto saving....', selectedBlock.id)
-
+    const handleAutoSaving = useMemo(() => throttle(async (content: string | NoteContent) => {
+        if (!selectedBlockId) return
         const payload: NoteContent = typeof content === 'string' ? { content } : content
-
         await saveBlock(payload)
-        }, autoSavingTime, {
+    }, autoSavingTime, {
         leading: false,
         trailing: true
-    } )
+    }), [saveBlock, selectedBlockId])
+
+    useEffect(() => () => handleAutoSaving.cancel(), [handleAutoSaving])
 
     const handleBlur = async (): Promise<void> => {
         if(!selectedBlock) return
