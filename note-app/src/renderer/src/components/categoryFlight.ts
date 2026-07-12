@@ -10,7 +10,7 @@ export const flyLabelToCategoryRow = (
   const ghost = document.createElement('div')
   ghost.textContent = label
   ghost.className =
-    'pointer-events-none fixed z-50 max-w-[12rem] truncate rounded-md border border-yellow-500/50 bg-zinc-900/95 px-2 py-1 text-xs text-yellow-500 shadow-xl'
+    'pointer-events-none fixed z-[80] max-w-[12rem] truncate rounded-md border border-yellow-500/50 bg-zinc-900/95 px-2 py-1 text-xs text-yellow-500 shadow-xl'
   ghost.style.left = `${from.x}px`
   ghost.style.top = `${from.y}px`
   document.body.appendChild(ghost)

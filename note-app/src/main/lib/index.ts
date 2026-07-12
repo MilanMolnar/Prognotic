@@ -7,7 +7,7 @@ import { dialog, safeStorage } from "electron"
 import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "fs-extra"
 import { homedir } from "os"
 import welcomeNoteFile from '../../../resources/welcome-note.md?asset'
-import { normalizeCategories, planLegacyWisprMigration, recordRoutingDecision, updateRoutingDecision } from './persistenceHelpers'
+import { normalizeCategories, normalizeDictationModeForPlatform, normalizeVerifiedLlmConnection, planLegacyWisprMigration, recordRoutingDecision, updateRoutingDecision } from './persistenceHelpers'
 
 
 export const separator = (): string => {
@@ -42,7 +42,7 @@ const withIndexLock = <T>(task: () => Promise<T>): Promise<T> => {
 
 // Write to a temp file and rename over the target so a crash mid-write
 // never leaves a truncated JSON file behind.
-const writeJsonAtomic = async (filePath: string, data: unknown): Promise<void> => {
+export const writeJsonAtomic = async (filePath: string, data: unknown): Promise<void> => {
     const tmpPath = `${filePath}.tmp`
     await writeFile(tmpPath, JSON.stringify(data, null, 2), { encoding: fileEncoding })
     await rename(tmpPath, filePath)
@@ -256,6 +256,19 @@ export const setBlockRouting = async (id: string, routing: NonNullable<BlockMeta
     })
 }
 
+export const setBlockAiLabel = async (id: string, aiLabel: string): Promise<BlockMeta | null> => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return null
+        const normalized = aiLabel.trim().replace(/\s+/g, ' ').split(' ').slice(0, 5).join(' ')
+        if (!normalized) return meta
+        meta.aiLabel = normalized
+        await writeJsonAtomic(getIndexPath(), index)
+        return meta
+    })
+}
+
 export const applyBlockRouting: ApplyBlockRouting = async (id, goalId) => {
     return withIndexLock(async () => {
         const { index } = await loadIndex()
@@ -339,6 +352,22 @@ export const acknowledgeBlockInGoal: AcknowledgeBlockInGoal = async (id, goalId)
     })
 }
 
+export const setPluginBlockPresence = async (
+    id: string,
+    categoryId: string,
+    visited: boolean
+): Promise<BlockMeta | null> => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta?.categories.includes(categoryId)) return null
+
+        meta.goalPresence = setGoalPresence(meta.goalPresence, categoryId, 'plugin', visited)
+        await writeJsonAtomic(getIndexPath(), index)
+        return meta
+    })
+}
+
 export const appendToBlock: AppendToBlock = async (id, text) => {
     return withIndexLock(async () => {
         const { index } = await loadIndex()
@@ -357,6 +386,19 @@ export const appendToBlock: AppendToBlock = async (id, text) => {
         await writeJsonAtomic(getIndexPath(), index)
 
         return meta
+    })
+}
+
+export const deleteBlockPermanently = async (id: string): Promise<boolean> => {
+    return withIndexLock(async () => {
+        const { index } = await loadIndex()
+        const meta = index.blocks[id]
+        if (!meta) return false
+
+        await remove(getBlockPath(meta.file))
+        delete index.blocks[id]
+        await writeJsonAtomic(getIndexPath(), index)
+        return true
     })
 }
 
@@ -383,17 +425,7 @@ export const deleteBlock: DeleteBlock = async (id) => {
 
     console.info('deleting block')
 
-    return withIndexLock(async () => {
-        const { index: freshIndex } = await loadIndex()
-        const freshMeta = freshIndex.blocks[id]
-        if (!freshMeta) return false
-
-        await remove(getBlockPath(freshMeta.file))
-        delete freshIndex.blocks[id]
-        await writeJsonAtomic(getIndexPath(), freshIndex)
-
-        return true
-    })
+    return deleteBlockPermanently(id)
 }
 
 // Silent counterpart to deleteBlock for automatic cleanup of blocks left
@@ -518,20 +550,24 @@ const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
         ? settings.pinnedGoalIds.filter((id): id is string => typeof id === 'string').slice(0, maxPinnedGoals)
         : defaultSettings.pinnedGoalIds,
     captureMode: settings.captureMode === 'natural' ? 'natural' : 'chat',
-    dictationMode: ((): AppSettings['dictationMode'] => {
-        const raw = settings.dictationMode as string
-        if (raw === 'online' || raw === 'browser-only' || raw === 'local') return 'windows'
-        return raw === 'windows' || raw === 'whisprflow' ? raw : defaultSettings.dictationMode
-    })(),
+    dictationMode: normalizeDictationModeForPlatform(settings.dictationMode, process.platform),
     llm: {
         provider: settings.llm?.provider === 'openai' || settings.llm?.provider === 'anthropic' || settings.llm?.provider === 'local'
             ? settings.llm.provider
             : 'gemini',
         model: typeof settings.llm?.model === 'string' ? settings.llm.model.trim() : '',
+        imageRecognitionModel: typeof settings.llm?.imageRecognitionModel === 'string'
+            ? settings.llm.imageRecognitionModel.trim()
+            : '',
         localBaseUrl: typeof settings.llm?.localBaseUrl === 'string' && /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\/?$/.test(settings.llm.localBaseUrl.trim())
             ? settings.llm.localBaseUrl.trim().replace(/\/$/, '')
             : defaultSettings.llm.localBaseUrl,
         polishDictation: settings.llm?.polishDictation === true,
+        aiBlockNameSummary: settings.llm?.aiBlockNameSummary === true,
+        verifiedConnection: normalizeVerifiedLlmConnection(settings.llm?.verifiedConnection),
+        verifiedImageRecognitionConnection: normalizeVerifiedLlmConnection(
+            settings.llm?.verifiedImageRecognitionConnection
+        ),
     },
     hasWhisprflowApiKey: false,
     hasGeminiApiKey: false,
@@ -631,7 +667,7 @@ export const getSettings: GetSettings = async () => {
             // The UI will surface encrypted-storage availability on the next save.
         }
     }
-    return publicSettings(clampSettings({ ...defaultSettings, ...raw }))
+    return publicSettings(clampSettings(raw as Partial<AppSettings>))
 }
 
 export const setSettings: SetSettings = async (patch) => {

@@ -14,6 +14,8 @@ export * from "./BlockPanel"
 export * from "./CaptureBar"
 export * from "./CaptureModeToggle"
 export * from "./DictationButton"
+export * from './ImageRecognitionButton'
+export * from './ImageRecognitionModal'
 export * from "./NaturalCaptureEditor"
 export * from "./NaturalCapturePanel"
 export * from "./FeedHeader"
@@ -22,3 +24,11 @@ export * from "./SettingsModal"
 export * from './AiActionDialog'
 export * from './EditorAiToolbar'
 export * from './AssistantSelect'
+export * from './AssistantMessageContent'
+export * from './NoteBlockPreviewModal'
+export * from './SettingInfoButton'
+export * from './SettingInfoModal'
+export * from './PluginManagerModal'
+export * from './PluginView'
+export * from './BlockDragOverlay'
+export * from './BlockMoveDialog'

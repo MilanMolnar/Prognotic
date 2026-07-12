@@ -16,10 +16,12 @@ export type BlocksState = {
     // Bumped when a quick-input append touches the selected block so the
     // editor remounts with the appended content.
     contentVersion: number
+    assistantFocus: { blockId: string; sequence: number } | null
 }
 
 export type BlocksActions = {
     selectBlock: (id: string | null) => void
+    focusBlockFromAssistant: (id: string) => void
     submitQuickNote: (text: string) => Promise<void>
     saveBlock: (content: NoteContent) => Promise<void>
     // Natural capture: full-content write to a known block (keeps its window
@@ -28,11 +30,14 @@ export type BlocksActions = {
     updateBlockContent: (id: string, content: NoteContent) => Promise<void>
     createCaptureBlock: (content: string, category: string | null) => Promise<BlockMeta>
     // Multi-goal plumbing: replaces the block's full category list.
-    updateBlockCategories: (id: string, categories: (string | null)[]) => Promise<void>
+    updateBlockCategories: (id: string, categories: (string | null)[]) => Promise<boolean>
     applyBlockRouting: (id: string, goalId: string) => Promise<boolean>
     applyNewGoalRouting: (id: string) => Promise<Goal | null>
     acknowledgeBlockInGoal: (id: string, goalId: string) => Promise<boolean>
     classifyBlock: (id: string) => Promise<void>
+    // Runs AI workflows after the block's final content is persisted.
+    // Naming failures are silent; routing keeps its existing retry UX.
+    finalizeBlock: (id: string) => Promise<void>
     // Silent delete for blocks left blank — no confirmation dialog; the
     // emptiness check is atomic in the main process.
     cleanupBlockIfEmpty: (id: string) => Promise<void>

@@ -1,4 +1,4 @@
-import { AssistantConversation, AssistantGoalMode, AssistantMessage, AssistantTimeRange, LlmProvider } from '@shared/models'
+import { AssistantConversation, AssistantGoalMode, AssistantMessage, AssistantMode, AssistantTimeRange, LlmProvider } from '@shared/models'
 import { AssistantModelSelection } from '@shared/types'
 import { createContext, useContext } from 'react'
 
@@ -7,6 +7,7 @@ export type AssistantState = {
   activeConversationId: string | null
   isStreaming: boolean
   error: string | null
+  assistantMode: AssistantMode
   goalMode: AssistantGoalMode
   timeRange: AssistantTimeRange
   customStartDate: string
@@ -15,6 +16,7 @@ export type AssistantState = {
   conversationModel: string
   usesDefaultModel: boolean
   draft: string
+  attachedBlockIds: string[]
 }
 
 export type AssistantActions = {
@@ -22,11 +24,15 @@ export type AssistantActions = {
   cancel: () => void
   newConversation: () => void
   selectConversation: (id: string) => void
+  setAssistantMode: (mode: AssistantMode) => void
   setGoalMode: (mode: AssistantGoalMode) => void
   setTimeRange: (range: AssistantTimeRange) => void
   setCustomDateRange: (startDate: string, endDate: string) => void
   setConversationModel: (selection: AssistantModelSelection | null) => void
   setDraft: (draft: string) => void
+  appendToDraft: (text: string) => void
+  attachBlock: (blockId: string) => void
+  removeAttachedBlock: (blockId: string) => void
   continueWithText: (text: string) => void
 }
 

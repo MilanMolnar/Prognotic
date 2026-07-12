@@ -1,4 +1,4 @@
-import { useBlockActions } from '@renderer/context'
+import { useBlockActions, useSettings } from '@renderer/context'
 import { blockLabel } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { BlockMeta } from '@shared/models'
@@ -71,6 +71,7 @@ const flyLabelToCategoryRow = (
 export const BlockContextMenu = ({ block, position, onClose, onAiAction }: BlockContextMenuProps): JSX.Element => {
   const menuRef = useRef<HTMLDivElement>(null)
   const { updateBlockCategories, classifyBlock } = useBlockActions()
+  const { settings } = useSettings()
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent): void => {
@@ -101,7 +102,7 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
         // .md file is untouched), with a flight to the sidebar row showing
         // where the block now also lives.
         void updateBlockCategories(block.id, [...block.categories, researchCategory])
-        flyLabelToCategoryRow(blockLabel(block.excerpt), position, researchCategory)
+        flyLabelToCategoryRow(blockLabel(block, settings.llm.aiBlockNameSummary), position, researchCategory)
       }
     } else {
       onAiAction(action.id as 'translate' | 'explain')

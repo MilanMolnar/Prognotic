@@ -10,6 +10,7 @@ export type AssistantSelectOption = {
 
 export type AssistantSelectProps = {
   ariaLabel: string
+  label?: string
   value: string
   options: AssistantSelectOption[]
   onChange: (value: string) => void
@@ -23,6 +24,7 @@ export type AssistantSelectProps = {
 
 export const AssistantSelect = ({
   ariaLabel,
+  label,
   value,
   options,
   onChange,
@@ -102,6 +104,7 @@ export const AssistantSelect = ({
   }
 
   return <div ref={rootRef} className={cn('relative min-w-0', className)}>
+    {label && <span className="mb-0.5 block px-0.5 text-[10px] font-medium text-zinc-500">{label}</span>}
     <button
       ref={triggerRef}
       type="button"

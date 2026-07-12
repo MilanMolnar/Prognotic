@@ -1,0 +1,106 @@
+{
+  "id": "dietary",
+  "name": "Dietary",
+  "version": "1.1.0",
+  "description": "Log meals, structure entries with host AI, and review recent dietary notes.",
+  "signature": "prognotic-plugin/v1",
+  "entry": "index.cjs",
+  "permissions": {
+    "blocks": "own",
+    "ai": true
+  },
+  "ai": {
+    "systemPrompt": "Act as a careful dietary logging assistant. Treat all calorie and macro values as estimates, state uncertainty when portions are unclear, avoid medical advice, and return concise Markdown suitable for appending to a meal note."
+  },
+  "sidebar": {
+    "label": "Dietary",
+    "icon": "utensils"
+  },
+  "configSchema": [
+    {
+      "key": "defaultMealType",
+      "label": "Default meal type",
+      "type": "select",
+      "default": "Meal",
+      "options": [
+        { "label": "Meal", "value": "Meal" },
+        { "label": "Breakfast", "value": "Breakfast" },
+        { "label": "Lunch", "value": "Lunch" },
+        { "label": "Dinner", "value": "Dinner" },
+        { "label": "Snack", "value": "Snack" }
+      ]
+    },
+    {
+      "key": "dailyCalorieTarget",
+      "label": "Daily calorie target",
+      "description": "Optional context for meal analysis.",
+      "type": "number",
+      "default": 2000,
+      "min": 500,
+      "max": 10000
+    },
+    {
+      "key": "includeMacros",
+      "label": "Estimate protein, carbohydrates, and fat",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "ui": {
+    "type": "note-feed",
+    "layout": [
+      "header",
+      "capture",
+      {
+        "type": "stat-row",
+        "items": [
+          { "key": "today", "label": "today" },
+          { "key": "unvisited", "label": "need review" },
+          { "key": "total", "label": "entries" }
+        ]
+      },
+      {
+        "type": "empty-state",
+        "message": "No meals logged yet. Add one above."
+      },
+      {
+        "type": "grouped-list",
+        "groupBy": "today-recent",
+        "entry": {
+          "type": "entry",
+          "content": "body",
+          "showTimestamp": true,
+          "showReviewBadge": true,
+          "editor": {
+            "type": "entry-editor",
+            "command": "updateMeal"
+          },
+          "deleteCommand": "deleteMeal",
+          "actions": [
+            {
+              "type": "action",
+              "command": "analyzeMeal",
+              "label": "Analyze",
+              "tone": "ai",
+              "showWhen": "always",
+              "aiPrompt": "Extract foods and portions, then provide an estimated calorie total, requested macros, and one short practical summary. Do not repeat the original meal note."
+            },
+            {
+              "type": "action",
+              "command": "markReviewed",
+              "label": "Mark reviewed",
+              "tone": "review",
+              "showWhen": "unvisited"
+            }
+          ]
+        }
+      }
+    ],
+    "emptyState": "No meals logged yet. Add one above.",
+    "capture": {
+      "command": "addMeal",
+      "label": "Add meal",
+      "placeholder": "What did you eat?"
+    }
+  }
+}

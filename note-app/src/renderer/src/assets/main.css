@@ -23,8 +23,20 @@
     -webkit-app-region: drag;
   }
 
-  button {
+  /* Form controls and editor surfaces may be nested inside a draggable
+     header, but must always remain focusable and interactive. */
+  button,
+  input,
+  textarea,
+  select,
+  [contenteditable='true'] {
     -webkit-app-region: no-drag;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'] {
+    @apply select-text;
   }
 
   .no-drag {
@@ -75,6 +87,12 @@
    Highlight API — no DOM mutation, safe with the Lexical editor). */
 ::highlight(block-search) {
   background-color: rgb(234 179 8 / 0.35);
+  color: white;
+}
+
+/* Temporary full-note focus after navigating from an assistant citation. */
+::highlight(assistant-block-focus) {
+  background-color: rgb(234 179 8 / 0.28);
   color: white;
 }
 

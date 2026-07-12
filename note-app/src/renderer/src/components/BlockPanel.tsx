@@ -10,7 +10,7 @@ export type BlockPanelProps = ComponentProps<'div'>
 // is selected — the full markdown editor in its place. The block's short name
 // is shown by FeedHeader while editing.
 export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Element => {
-  const { selectedBlockId, selectedBlock, contentVersion } = useBlocks()
+  const { selectedBlockId, selectedBlock, contentVersion, assistantFocus } = useBlocks()
   const { selectBlock } = useBlockActions()
   const { isSearchOpen, query } = useSearch()
   const { settings } = useSettings()
@@ -49,6 +49,31 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
       CSS.highlights.delete('block-search')
     }
   }, [isSearchOpen, trimmedQuery, selectedBlockId, contentVersion])
+
+  useEffect(() => {
+    CSS.highlights.delete('assistant-block-focus')
+    const container = editorContainerRef.current
+    if (!container || !selectedBlock || assistantFocus?.blockId !== selectedBlockId) return
+
+    const ranges: Range[] = []
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+    let node: Node | null
+    while ((node = walker.nextNode())) {
+      if (!node.textContent?.length) continue
+      const range = new Range()
+      range.selectNodeContents(node)
+      ranges.push(range)
+    }
+    if (ranges.length === 0) return
+
+    CSS.highlights.set('assistant-block-focus', new Highlight(...ranges))
+    ranges[0].startContainer.parentElement?.scrollIntoView({ block: 'nearest' })
+    const timer = window.setTimeout(() => CSS.highlights.delete('assistant-block-focus'), 2_600)
+    return () => {
+      window.clearTimeout(timer)
+      CSS.highlights.delete('assistant-block-focus')
+    }
+  }, [assistantFocus, contentVersion, selectedBlock, selectedBlockId])
 
   if (selectedBlockId === null) {
     return settings.captureMode === 'natural' ? (

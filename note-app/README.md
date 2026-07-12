@@ -12,7 +12,7 @@ npm run dev
 ## What is implemented
 
 - Quick Notes, Research, custom goals, pinned goals, and multi-goal blocks.
-- Chat and Natural capture modes, MDXEditor, fuzzy search, Windows dictation, and Wispr Flow dictation.
+- Chat and Natural capture modes, MDXEditor, fuzzy search, Windows and macOS system dictation, and Wispr Flow dictation.
 - Goal context menu: Rename, Edit description/routing hints, and Delete. Deletion preserves other categories and returns only otherwise-uncategorized blocks to Quick Notes.
 - BYOK Gemini, OpenAI, Claude, and local LM Studio model selection with connection tests.
 - Persistent, note-aware assistant conversations with relevance-ranked retrieval, streaming, clickable citations, rich scope filters, and per-conversation model overrides.
@@ -20,6 +20,7 @@ npm run dev
 - Translate and Explain for full blocks or selected editor text, with Copy, Replace, and Continue in chat.
 - Optional AI cleanup for Wispr Flow transcripts, with Retry and Use original recovery.
 - Semantic goal matching across names, descriptions, and routing hints; honest low-confidence suggestions; sidebar unvisited counters; per-goal acknowledgement; and visible classification retry status.
+- Folder-installed, manifest-driven plugins with scoped note blocks, host AI, local configuration/storage, and host-rendered views.
 
 ## Settings and credentials
 
@@ -39,6 +40,9 @@ The app stores data in `~/NoteMark/`:
 | `settings.json` | Public settings |
 | `secrets.json` | Encrypted credentials |
 | `assistant-history.json` | Recent assistant conversations |
+| `plugins/` | Manually installed plugin folders (`plugin.json` + CommonJS entry) |
+| `plugin-state.json` | Enabled plugin ids, plugin configuration, and seed state |
+| `plugin-data/` | Size-bounded, plugin-local JSON storage |
 
 ## Scripts
 
@@ -50,4 +54,4 @@ The app stores data in `~/NoteMark/`:
 | `npm test` | Vitest unit tests |
 | `npm run lint` | ESLint |
 
-For architecture and IPC details, see [DEVELOPER.md](./DEVELOPER.md). For AI status and backlog, see [AI_PLAN.MD](../AI_PLAN.MD).
+For plugin development, see [docs/PLUGINS.md](./docs/PLUGINS.md). For architecture and IPC details, see [DEVELOPER.md](./DEVELOPER.md). For AI status and backlog, see [AI_PLAN.MD](../AI_PLAN.MD).

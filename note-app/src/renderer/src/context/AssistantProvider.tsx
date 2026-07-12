@@ -1,12 +1,14 @@
-import { AssistantConversation, AssistantGoalMode, AssistantMessage, AssistantTimeRange, LlmProvider } from '@shared/models'
+import { researchCategory } from '@shared/constants'
+import { AssistantConversation, AssistantGoalMode, AssistantMessage, AssistantMode, AssistantTimeRange, LlmProvider } from '@shared/models'
 import { AssistantModelSelection, AssistantScope, LlmMessage } from '@shared/types'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useGoals } from './GoalsContext'
+import { useGoalActions, useGoals } from './GoalsContext'
 import { usePanels, usePanelActions } from './PanelsContext'
 import { useSettings } from './SettingsContext'
 import { AssistantActions, AssistantActionsContext, AssistantState, AssistantStateContext } from './AssistantContext'
 
 type ConversationPreferences = {
+  mode: AssistantMode
   goalMode: AssistantGoalMode
   timeRange: AssistantTimeRange
   customStartDate: string
@@ -17,6 +19,7 @@ type ConversationPreferences = {
 }
 
 const defaultPreferences = (provider: LlmProvider, model: string): ConversationPreferences => ({
+  mode: 'note-chat',
   goalMode: 'open',
   timeRange: 'today',
   customStartDate: '',
@@ -26,6 +29,20 @@ const defaultPreferences = (provider: LlmProvider, model: string): ConversationP
   usesDefaultModel: true
 })
 
+const normalizedMode = (mode: AssistantConversation['mode']): AssistantMode =>
+  mode === 'research' || mode === 'search' ? mode : 'note-chat'
+
+const modeConstraints = (mode: AssistantMode): Partial<ConversationPreferences> => {
+  if (mode === 'research') return { goalMode: 'open' }
+  if (mode === 'search') return { goalMode: 'all', timeRange: 'all' }
+  return {}
+}
+
+const constrainPreferences = (preferences: ConversationPreferences): ConversationPreferences => ({
+  ...preferences,
+  ...modeConstraints(preferences.mode)
+})
+
 const preferencesFor = (
   conversation: AssistantConversation | undefined,
   pending: ConversationPreferences,
@@ -33,10 +50,11 @@ const preferencesFor = (
   defaultModel: string
 ): ConversationPreferences => {
   if (!conversation) {
-    return pending.usesDefaultModel ? { ...pending, provider: defaultProvider, model: defaultModel } : pending
+    return constrainPreferences(pending.usesDefaultModel ? { ...pending, provider: defaultProvider, model: defaultModel } : pending)
   }
   const usesDefaultModel = conversation.usesDefaultModel !== false
-  return {
+  return constrainPreferences({
+    mode: normalizedMode(conversation.mode),
     goalMode: conversation.goalMode ?? 'open',
     timeRange: conversation.timeRange ?? 'today',
     customStartDate: conversation.customStartDate ?? '',
@@ -44,7 +62,7 @@ const preferencesFor = (
     provider: usesDefaultModel ? defaultProvider : (conversation.provider ?? defaultProvider),
     model: usesDefaultModel ? defaultModel : (conversation.model ?? defaultModel),
     usesDefaultModel
-  }
+  })
 }
 
 const createConversation = (preferences: ConversationPreferences): AssistantConversation => {
@@ -59,12 +77,13 @@ const createConversation = (preferences: ConversationPreferences): AssistantConv
   }
 }
 
-const citationIds = (text: string): string[] => [...text.matchAll(/\[block:([\w-]+)]/g)].map((match) => match[1])
+const citationIds = (text: string): string[] => [...new Set([...text.matchAll(/\[block:([\w-]+)]/g)].map((match) => match[1]))]
 
 const withoutLeadingDisclosure = (text: string): string =>
   text.replace(/^\s*(?:\*\*)?Read notes from:\s*[^\r\n]*(?:\*\*)?\s*(?:\r?\n)*/i, '')
 
 const scopeDates = (preferences: ConversationPreferences): Pick<AssistantScope, 'from' | 'to'> | null => {
+  if (preferences.timeRange === 'all') return {}
   const now = new Date()
   if (preferences.timeRange === 'today') {
     const start = new Date(now)
@@ -86,30 +105,39 @@ const scopeDates = (preferences: ConversationPreferences): Pick<AssistantScope, 
 export const AssistantProvider = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
   const { settings } = useSettings()
   const { selectedCategory } = useGoals()
+  const { selectCategory } = useGoalActions()
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [pendingPreferences, setPendingPreferences] = useState<ConversationPreferences>(() => defaultPreferences(settings.llm.provider, settings.llm.model))
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [attachedBlockIds, setAttachedBlockIds] = useState<string[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const requestIdRef = useRef<string | null>(null)
   const requestConversationIdRef = useRef<string | null>(null)
   const activeConversationIdRef = useRef(activeConversationId)
+  const conversationsRef = useRef(conversations)
   const { isRightPanelOpen } = usePanels()
   const { toggleRightPanel } = usePanelActions()
 
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId
-  }, [activeConversationId])
+    conversationsRef.current = conversations
+  }, [activeConversationId, conversations])
 
   useEffect(() => {
     void window.context.getAssistantConversations().then((saved) => {
-      setConversations(saved)
-      setActiveConversationId(saved[0]?.id ?? null)
+      const normalized = saved.map((conversation) => {
+        const mode = normalizedMode(conversation.mode)
+        return { ...conversation, mode, ...modeConstraints(mode) }
+      })
+      setConversations(normalized)
+      setActiveConversationId(normalized[0]?.id ?? null)
+      if (normalized[0]?.mode === 'research') selectCategory(researchCategory)
       setIsLoaded(true)
     })
-  }, [])
+  }, [selectCategory])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -129,12 +157,17 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
         ...conversation,
         updatedAt: Date.now(),
         readGoalLabels: event.readGoalLabels,
-        messages: conversation.messages.map((message, index) => index === conversation.messages.length - 1 ? {
-          ...message,
-          text: withoutLeadingDisclosure(message.text),
-          citedBlockIds: citationIds(message.text).filter((id) => event.citedBlockIds.includes(id)),
-          readGoalLabels: event.readGoalLabels
-        } : message)
+        messages: conversation.messages.map((message, index) => {
+          if (index !== conversation.messages.length - 1) return message
+          const citedBlockIds = citationIds(message.text).filter((id) => event.citedBlockIds.includes(id))
+          return {
+            ...message,
+            text: withoutLeadingDisclosure(message.text),
+            citedBlockIds,
+            citedBlockCategoryIds: Object.fromEntries(citedBlockIds.map((id) => [id, event.citedBlockCategoryIds[id] ?? null])),
+            readGoalLabels: event.readGoalLabels
+          }
+        })
       }))
       requestIdRef.current = null
       requestConversationIdRef.current = null
@@ -171,6 +204,7 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     }
     ensureOpen()
     setError(null)
+    const requestAttachedBlockIds = attachedBlockIds
     const requestId = crypto.randomUUID()
     requestIdRef.current = requestId
     const userMessage: AssistantMessage = { id: crypto.randomUUID(), role: 'user', text: trimmed, createdAt: Date.now(), provider: preferences.provider, model: preferences.model }
@@ -195,8 +229,10 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     setIsStreaming(true)
     const selection: AssistantModelSelection = { provider: preferences.provider, model: preferences.model }
     const response = await window.context.startAssistantStream(requestId, trimmed, history, {
+      mode: preferences.mode,
       goalMode: preferences.goalMode,
-      openGoalId: selectedCategory,
+      openGoalId: preferences.mode === 'research' ? researchCategory : selectedCategory,
+      ...(requestAttachedBlockIds.length > 0 ? { attachedBlockIds: requestAttachedBlockIds } : {}),
       ...dates
     }, selection)
     if (!response.ok) {
@@ -204,8 +240,10 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
       requestConversationIdRef.current = null
       setIsStreaming(false)
       setError(response.error ?? 'Could not start the assistant.')
+      return
     }
-  }, [activeConversation, activeConversationId, ensureOpen, isStreaming, preferences, selectedCategory])
+    setAttachedBlockIds((previous) => previous.filter((id) => !requestAttachedBlockIds.includes(id)))
+  }, [activeConversation, activeConversationId, attachedBlockIds, ensureOpen, isStreaming, preferences, selectedCategory])
 
   const cancel = useCallback(() => {
     if (!requestIdRef.current) return
@@ -220,8 +258,37 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     setError(null)
     ensureOpen()
   }, [ensureOpen, settings.llm.model, settings.llm.provider])
-  const selectConversation = useCallback((id: string) => { setActiveConversationId(id || null); setError(null); ensureOpen() }, [ensureOpen])
+  const selectConversation = useCallback((id: string) => {
+    const conversation = conversationsRef.current.find((item) => item.id === id)
+    const mode = normalizedMode(conversation?.mode)
+    if (conversation) {
+      const constraints = modeConstraints(mode)
+      setConversations((previous) => previous.map((item) => item.id === id ? { ...item, mode, ...constraints } : item))
+      if (mode === 'research') selectCategory(researchCategory)
+    }
+    setActiveConversationId(id || null)
+    setError(null)
+    ensureOpen()
+  }, [ensureOpen, selectCategory])
   const continueWithText = useCallback((text: string) => { ensureOpen(); setDraft(text) }, [ensureOpen])
+  const appendToDraft = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    ensureOpen()
+    setDraft((previous) => previous.trim() ? `${previous.trimEnd()}\n\n${trimmed}` : trimmed)
+  }, [ensureOpen])
+  const attachBlock = useCallback((blockId: string) => {
+    ensureOpen()
+    setAttachedBlockIds((previous) => previous.includes(blockId) ? previous : [...previous, blockId])
+  }, [ensureOpen])
+  const removeAttachedBlock = useCallback((blockId: string) => {
+    setAttachedBlockIds((previous) => previous.filter((id) => id !== blockId))
+  }, [])
+  const setAssistantMode = useCallback((mode: AssistantMode) => {
+    if (requestIdRef.current) return
+    updatePreferences({ mode, ...modeConstraints(mode) })
+    if (mode === 'research') selectCategory(researchCategory)
+  }, [selectCategory, updatePreferences])
   const setGoalMode = useCallback((goalMode: AssistantGoalMode) => updatePreferences({ goalMode }), [updatePreferences])
   const setTimeRange = useCallback((timeRange: AssistantTimeRange) => updatePreferences({ timeRange }), [updatePreferences])
   const setCustomDateRange = useCallback((customStartDate: string, customEndDate: string) => updatePreferences({ customStartDate, customEndDate }), [updatePreferences])
@@ -236,6 +303,7 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     activeConversationId,
     isStreaming,
     error,
+    assistantMode: preferences.mode,
     goalMode: preferences.goalMode,
     timeRange: preferences.timeRange,
     customStartDate: preferences.customStartDate,
@@ -243,19 +311,24 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     conversationProvider: preferences.provider,
     conversationModel: preferences.model,
     usesDefaultModel: preferences.usesDefaultModel,
-    draft
-  }), [conversations, activeConversationId, isStreaming, error, preferences, draft])
+    draft,
+    attachedBlockIds
+  }), [conversations, activeConversationId, isStreaming, error, preferences, draft, attachedBlockIds])
   const actionsValue: AssistantActions = useMemo(() => ({
     sendMessage,
     cancel,
     newConversation,
     selectConversation,
+    setAssistantMode,
     setGoalMode,
     setTimeRange,
     setCustomDateRange,
     setConversationModel,
     setDraft,
+    appendToDraft,
+    attachBlock,
+    removeAttachedBlock,
     continueWithText
-  }), [sendMessage, cancel, newConversation, selectConversation, setGoalMode, setTimeRange, setCustomDateRange, setConversationModel, continueWithText])
+  }), [sendMessage, cancel, newConversation, selectConversation, setAssistantMode, setGoalMode, setTimeRange, setCustomDateRange, setConversationModel, appendToDraft, attachBlock, removeAttachedBlock, continueWithText])
   return <AssistantStateContext.Provider value={stateValue}><AssistantActionsContext.Provider value={actionsValue}>{children}</AssistantActionsContext.Provider></AssistantStateContext.Provider>
 }

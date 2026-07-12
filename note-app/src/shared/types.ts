@@ -1,4 +1,6 @@
-import { AppSettings, AssistantConversation, AssistantGoalMode, BlockMeta, Goal, LlmCredentialName, LlmProvider, NoteContent } from "./models";
+import { AppSettings, AssistantConversation, AssistantGoalMode, AssistantMode, BlockMeta, Goal, LlmCredentialName, LlmProvider, NoteContent } from "./models";
+import { OpenPluginsFolderResult, PluginCatalog, PluginCommandInput, PluginCommandResult, PluginConfig, PluginHostCallResult, PluginHostRequest, PluginMutationResult } from './plugins'
+import type { SupportedImageMimeType } from './vision'
 
 export type GetBlocks = () => Promise<BlockMeta[]>
 export type ReadBlock = (id: BlockMeta['id']) => Promise<NoteContent>
@@ -29,26 +31,51 @@ export type TranscriptionResult = { text: string; error?: never } | { error: str
 export type TranscribeAudio = (audio: ArrayBuffer) => Promise<TranscriptionResult>
 // Windows dictation: main sends Win+H to toggle system voice typing.
 export type ToggleWindowsDictation = () => Promise<{ ok: boolean; error?: string }>
+// macOS dictation: main sends Fn-D to toggle system Dictation.
+export type ToggleMacDictation = () => Promise<{ ok: boolean; error?: string }>
+export type WriteClipboardText = (text: string) => Promise<void>
 export type LlmMessage = { role: 'system' | 'user' | 'assistant'; content: string }
-export type LlmModel = { id: string; label: string; contextWindow?: number }
+export type LlmModel = { id: string; label: string; contextWindow?: number; vision?: boolean }
 export type LlmModelsResult = { models: LlmModel[]; error?: never } | { models?: never; error: string }
 export type GetLlmModels = (provider: LlmProvider) => Promise<LlmModelsResult>
 export type TestLlmConnection = () => Promise<{ ok: boolean; error?: string }>
+export type ImageRecognitionInput = {
+    imageBytes: ArrayBuffer
+    mimeType: SupportedImageMimeType
+    language: string
+    containsHandwriting: boolean
+}
+export type ImageRecognitionResult = { text: string; error?: never } | { error: string; text?: never }
+export type RecognizeImage = (input: ImageRecognitionInput) => Promise<ImageRecognitionResult>
+export type TestImageRecognitionConnection = () => Promise<{ ok: boolean; error?: string }>
 export type AssistantScope = {
+    mode: AssistantMode
     goalMode: AssistantGoalMode
     openGoalId?: string | null
     goalIds?: string[]
+    // Explicit composer context; main validates ids and loads these blocks
+    // in full even when the retrieval scope would exclude them.
+    attachedBlockIds?: string[]
     from?: number
     to?: number
 }
 export type AssistantModelSelection = { provider: LlmProvider; model: string }
 export type StartAssistantStream = (requestId: string, message: string, history: LlmMessage[], scope: AssistantScope, selection?: AssistantModelSelection) => Promise<{ ok: boolean; error?: string }>
 export type CancelAssistantStream = (requestId: string) => Promise<void>
-export type AssistantStreamEvent = { requestId: string; type: 'token'; text: string } | { requestId: string; type: 'done'; citedBlockIds: string[]; readGoalLabels: string[] } | { requestId: string; type: 'error'; message: string }
+export type AssistantStreamEvent = { requestId: string; type: 'token'; text: string } | { requestId: string; type: 'done'; citedBlockIds: string[]; citedBlockCategoryIds: Record<string, string | null>; readGoalLabels: string[] } | { requestId: string; type: 'error'; message: string }
 export type OnAssistantStreamEvent = (callback: (event: AssistantStreamEvent) => void) => () => void
 export type ClassifyBlockResult = { block: BlockMeta | null; error?: string }
 export type ClassifyBlock = (blockId: string) => Promise<ClassifyBlockResult>
+export type SummarizeBlockNameResult = { block: BlockMeta | null; error?: string }
+export type SummarizeBlockName = (blockId: string) => Promise<SummarizeBlockNameResult>
 export type RunInlineAction = (actionId: 'translate' | 'explain', text: string, blockId?: string) => Promise<{ text: string; error?: never } | { error: string; text?: never }>
 export type PolishTranscript = (text: string) => Promise<{ text: string; error?: never } | { error: string; text?: never }>
 export type GetAssistantConversations = () => Promise<AssistantConversation[]>
 export type SaveAssistantConversations = (conversations: AssistantConversation[]) => Promise<void>
+export type GetPlugins = () => Promise<PluginCatalog>
+export type SetPluginEnabled = (pluginId: string, enabled: boolean) => Promise<PluginMutationResult>
+export type SetPluginConfig = (pluginId: string, config: PluginConfig) => Promise<PluginMutationResult>
+export type RemovePlugin = (folderName: string) => Promise<PluginMutationResult>
+export type OpenPluginsFolder = () => Promise<OpenPluginsFolderResult>
+export type RunPluginCommand = (pluginId: string, command: string, input: PluginCommandInput) => Promise<PluginCommandResult>
+export type CallPluginHost = (pluginId: string, request: PluginHostRequest) => Promise<PluginHostCallResult>

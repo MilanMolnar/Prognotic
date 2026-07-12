@@ -15,7 +15,7 @@ export type BlockRouting = {
     suggestedNewGoal?: SuggestedNewGoal
 }
 
-export type GoalPresenceSource = 'user' | 'routed' | 'assistant' | 'research'
+export type GoalPresenceSource = 'user' | 'routed' | 'assistant' | 'research' | 'plugin'
 
 export type GoalPresence = {
     source: GoalPresenceSource
@@ -32,6 +32,9 @@ export type BlockMeta = {
     // block regardless of how many categories list it.
     categories: (string | null)[]
     excerpt: string
+    // Optional AI-generated display name. Missing on legacy index entries;
+    // renderer settings decide whether it is preferred over the excerpt.
+    aiLabel?: string
     // Per-category provenance and acknowledgement. Missing legacy entries
     // are treated as already seen, so migrations never create false badges.
     goalPresence?: Record<string, GoalPresence>
@@ -57,18 +60,26 @@ export type Goal = {
 // the bottom, 'natural' = a document-style writing surface pinned at the top.
 export type CaptureMode = 'chat' | 'natural'
 
-// Speech-to-text backend for capture: 'windows' (Win+H system voice typing),
-// 'whisprflow' (the Wispr Flow developer API — wisprflow.ai, not OpenAI
-// Whisper). Persisted in settings.json.
-export type DictationMode = 'windows' | 'whisprflow'
+// Speech-to-text backend for capture: native Windows (Win+H), native macOS
+// (Fn-D), or the Wispr Flow developer API. Persisted in settings.json.
+export type DictationMode = 'windows' | 'macos' | 'whisprflow'
 
 export type LlmProvider = 'gemini' | 'openai' | 'anthropic' | 'local'
+
+export type VerifiedLlmConnection = {
+    provider: LlmProvider
+    model: string
+}
 
 export type LlmSettings = {
     provider: LlmProvider
     model: string
+    imageRecognitionModel: string
     localBaseUrl: string
     polishDictation: boolean
+    aiBlockNameSummary: boolean
+    verifiedConnection?: VerifiedLlmConnection
+    verifiedImageRecognitionConnection?: VerifiedLlmConnection
 }
 
 export type AppSettings = {
@@ -94,11 +105,13 @@ export type AssistantMessage = {
     provider?: LlmProvider
     model?: string
     citedBlockIds?: string[]
+    citedBlockCategoryIds?: Record<string, string | null>
     readGoalLabels?: string[]
 }
 
+export type AssistantMode = 'note-chat' | 'research' | 'search'
 export type AssistantGoalMode = 'open' | 'all' | 'relevant'
-export type AssistantTimeRange = 'today' | 'week' | 'custom'
+export type AssistantTimeRange = 'today' | 'week' | 'custom' | 'all'
 
 export type AssistantConversation = {
     id: string
@@ -106,6 +119,9 @@ export type AssistantConversation = {
     createdAt: number
     updatedAt: number
     messages: AssistantMessage[]
+    // Optional only for assistant-history.json files written before modes
+    // existed. The renderer normalizes missing values to Note Chat on load.
+    mode?: AssistantMode
     goalMode?: AssistantGoalMode
     timeRange?: AssistantTimeRange
     customStartDate?: string

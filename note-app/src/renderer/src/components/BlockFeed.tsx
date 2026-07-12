@@ -2,7 +2,7 @@ import { BlockCard } from '@/components'
 import { useBlockFeed } from '@renderer/hooks/useBlockFeed'
 import { cn } from '@renderer/utils'
 import { becameAppliedRouting } from '@renderer/utils/routing'
-import { useGoals } from '@renderer/context'
+import { useBlocks, useGoals } from '@renderer/context'
 import { isEmpty } from 'lodash'
 import { ComponentProps, JSX, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 
@@ -19,6 +19,7 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
     handleBlockDelete
   } = useBlockFeed()
   const { selectedCategory } = useGoals()
+  const { assistantFocus, selectedBlockId } = useBlocks()
 
   // Keep the newest text visible next to the capture bar (chat-style);
   // while searching the best match sits at the top instead. blockContents is
@@ -39,6 +40,22 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
     if (element) itemRefs.current.set(id, element)
     else itemRefs.current.delete(id)
   }, [])
+
+  useEffect(() => {
+    if (!assistantFocus || selectedBlockId !== null) return
+    const element = itemRefs.current.get(assistantFocus.blockId)
+    if (!element) return
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const animation = element.animate(
+      [
+        { boxShadow: '0 0 0 0 rgb(234 179 8 / 0)', transform: 'scale(1)' },
+        { boxShadow: '0 0 0 3px rgb(234 179 8 / 0.65)', transform: 'scale(1.01)', offset: 0.2 },
+        { boxShadow: '0 0 0 0 rgb(234 179 8 / 0)', transform: 'scale(1)' }
+      ],
+      { duration: 2_600, easing: 'ease-out' }
+    )
+    return () => animation.cancel()
+  }, [assistantFocus, feedBlocks, selectedBlockId, selectedCategory])
 
   useLayoutEffect(() => {
     const currentRects = new Map<string, DOMRect>()

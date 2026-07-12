@@ -33,7 +33,7 @@ export const useNaturalCapture = ({
     category
 }: UseNaturalCaptureParams): UseNaturalCaptureResult => {
     const { openBlockId } = useBlocks()
-    const { updateBlockContent, createCaptureBlock, cleanupBlockIfEmpty, closeOpenBlock, classifyBlock } =
+    const { updateBlockContent, createCaptureBlock, cleanupBlockIfEmpty, closeOpenBlock, finalizeBlock } =
         useBlockActions()
 
     const editorRef = useRef<MDXEditorMethods>(null)
@@ -174,11 +174,11 @@ export const useNaturalCapture = ({
                 if (pending !== null && pending !== saved) {
                     await updateBlockContent(sessionId, { content: pending })
                 }
-                await classifyBlock(sessionId)
+                await finalizeBlock(sessionId)
             })
             .catch(() => undefined)
         editorRef.current?.setMarkdown('')
-    }, [openBlockId, updateBlockContent, cleanupBlockIfEmpty, classifyBlock])
+    }, [openBlockId, updateBlockContent, cleanupBlockIfEmpty, finalizeBlock])
 
     // Flush unsaved text before the surface goes away (mode or category
     // switch, or a block opened for editing) — or, if the session block was

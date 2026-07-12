@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { defaultDictationModeForPlatform } from '@shared/constants'
 import { BlockRouting } from '@shared/models'
-import { normalizeCategories, planLegacyWisprMigration, recordRoutingDecision, updateRoutingDecision } from './persistenceHelpers'
+import { normalizeCategories, normalizeDictationModeForPlatform, normalizeVerifiedLlmConnection, planLegacyWisprMigration, recordRoutingDecision, updateRoutingDecision } from './persistenceHelpers'
 
 const routing = (decidedAt: number, status: BlockRouting['status'] = 'pending'): BlockRouting => ({
     status,
@@ -21,6 +22,35 @@ describe('persistence helpers', () => {
             removePlaintextImmediately: true
         })
         expect(planLegacyWisprMigration({ whisprflowApiKey: ' legacy ' }, false).keyToEncrypt).toBe('legacy')
+    })
+
+    it('chooses the correct fresh-install dictation mode for each platform', () => {
+        expect(defaultDictationModeForPlatform('win32')).toBe('windows')
+        expect(defaultDictationModeForPlatform('darwin')).toBe('macos')
+        expect(defaultDictationModeForPlatform('linux')).toBe('whisprflow')
+    })
+
+    it('migrates stale native modes but preserves an explicit Wispr Flow choice', () => {
+        expect(normalizeDictationModeForPlatform('windows', 'win32')).toBe('windows')
+        expect(normalizeDictationModeForPlatform('macos', 'darwin')).toBe('macos')
+        expect(normalizeDictationModeForPlatform('windows', 'darwin')).toBe('macos')
+        expect(normalizeDictationModeForPlatform('macos', 'win32')).toBe('windows')
+        expect(normalizeDictationModeForPlatform('windows', 'linux')).toBe('whisprflow')
+        expect(normalizeDictationModeForPlatform('whisprflow', 'darwin')).toBe('whisprflow')
+        expect(normalizeDictationModeForPlatform('whisprflow', 'win32')).toBe('whisprflow')
+        expect(normalizeDictationModeForPlatform('whisprflow', 'linux')).toBe('whisprflow')
+        expect(normalizeDictationModeForPlatform('online', 'darwin')).toBe('macos')
+        expect(normalizeDictationModeForPlatform('invalid', 'win32')).toBe('windows')
+        expect(normalizeDictationModeForPlatform(undefined, 'linux')).toBe('whisprflow')
+    })
+
+    it('normalizes persisted connection verification metadata', () => {
+        expect(normalizeVerifiedLlmConnection({ provider: 'openai', model: '  gpt-test  ' })).toEqual({
+            provider: 'openai',
+            model: 'gpt-test'
+        })
+        expect(normalizeVerifiedLlmConnection({ provider: 'unknown', model: 'model' })).toBeUndefined()
+        expect(normalizeVerifiedLlmConnection({ provider: 'openai', model: '' })).toBeUndefined()
     })
 
     it('caps routing history and updates the matching accepted decision', () => {

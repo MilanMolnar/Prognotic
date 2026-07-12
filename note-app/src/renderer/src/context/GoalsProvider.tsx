@@ -15,6 +15,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     const [goals, setGoals] = useState<Goal[] | undefined>(undefined)
     // null = Quick Notes, the always-available default capture target.
     const [selectedCategory, setSelectedCategory] = useState<CategoryKey>(null)
+    const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null)
     const { updateSettings } = useSettingsActions()
 
     useEffect(() => {
@@ -34,6 +35,11 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
 
     const selectCategory = useCallback((key: CategoryKey) => {
         setSelectedCategory(key)
+        setSelectedPluginId(null)
+    }, [])
+
+    const selectPlugin = useCallback((pluginId: string | null) => {
+        setSelectedPluginId(pluginId)
     }, [])
 
     const registerPersistedGoal = useCallback((goal: Goal) => {
@@ -50,6 +56,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         const goal = await window.context.createGoal(name, description, routingHints)
         registerPersistedGoal(goal)
         setSelectedCategory(goal.id)
+        setSelectedPluginId(null)
     }, [registerPersistedGoal])
 
     const renameGoal = useCallback(async (id: string, name: string, description: string, routingHints = '') => {
@@ -71,13 +78,13 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     }, [updateSettings])
 
     const stateValue: GoalsState = useMemo(
-        () => ({ goals, selectedCategory }),
-        [goals, selectedCategory]
+        () => ({ goals, selectedCategory, selectedPluginId }),
+        [goals, selectedCategory, selectedPluginId]
     )
 
     const actionsValue: GoalsActions = useMemo(
-        () => ({ selectCategory, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
-        [selectCategory, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
+        () => ({ selectCategory, selectPlugin, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
+        [selectCategory, selectPlugin, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
     )
 
     return (

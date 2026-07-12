@@ -22,6 +22,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
     const [openBlockId, setOpenBlockId] = useState<string | null>(null)
     const [contentVersion, setContentVersion] = useState(0)
+    const [assistantFocus, setAssistantFocus] = useState<{ blockId: string; sequence: number } | null>(null)
+    const assistantFocusSequenceRef = useRef(0)
     const [routingErrors, setRoutingErrors] = useState<Record<string, string>>({})
     const [routingInProgressIds, setRoutingInProgressIds] = useState<Set<string>>(() => new Set())
 
@@ -172,6 +174,23 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         }
     }, [])
 
+    const nameFinalizedBlock = useCallback(async (id: string) => {
+        try {
+            const result = await window.context.summarizeBlockName(id)
+            const updated = result.block
+            if (!updated) return
+            setBlocks((previous) => previous?.map((block) =>
+                block.id === updated.id ? { ...block, aiLabel: updated.aiLabel } : block
+            ))
+        } catch {
+            // AI naming is optional: the excerpt label remains the fallback.
+        }
+    }, [])
+
+    const finalizeBlock = useCallback(async (id: string): Promise<void> => {
+        await Promise.all([nameFinalizedBlock(id), classifyQuickNote(id)])
+    }, [nameFinalizedBlock, classifyQuickNote])
+
     // Close the open block once its idle window elapses. Every write bumps
     // the block's updatedAt, which reschedules this timeout — that *is* the
     // "each write resets the countdown" behavior. Settings changes reschedule
@@ -198,11 +217,11 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
                 expired.categories.includes(selectedCategoryRef.current)
             if (!ownedByNaturalSurface) {
                 void cleanupBlockIfEmpty(openBlockId)
-                void classifyQuickNote(openBlockId)
+                void finalizeBlock(openBlockId)
             }
         }, Math.max(remaining, 0))
         return () => clearTimeout(timer)
-    }, [openBlockId, openBlockUpdatedAt, windowMs, cleanupBlockIfEmpty, classifyQuickNote])
+    }, [openBlockId, openBlockUpdatedAt, windowMs, cleanupBlockIfEmpty, finalizeBlock])
 
     const selectBlock = useCallback(
         (id: string | null) => {
@@ -216,6 +235,11 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         },
         [cleanupBlockIfEmpty]
     )
+
+    const focusBlockFromAssistant = useCallback((id: string) => {
+        assistantFocusSequenceRef.current += 1
+        setAssistantFocus({ blockId: id, sequence: assistantFocusSequenceRef.current })
+    }, [])
 
     const submitQuickNote = useCallback(async (text: string) => {
         const trimmed = text.trim()
@@ -310,13 +334,14 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     // Multi-goal plumbing: replaces a block's full category list (future
     // "also show in…" UI). The block's markdown file is shared by all of
     // its categories.
-    const updateBlockCategories = useCallback(async (id: string, categories: (string | null)[]) => {
+    const updateBlockCategories = useCallback(async (id: string, categories: (string | null)[]): Promise<boolean> => {
         const updatedMeta = await window.context.updateBlockCategories(id, categories)
-        if (!updatedMeta) return
+        if (!updatedMeta) return false
 
         setBlocks((prev) =>
             prev?.map((block) => (block.id === updatedMeta.id ? updatedMeta : block))
         )
+        return true
     }, [])
 
     const applyBlockRouting = useCallback(async (id: string, goalId: string): Promise<boolean> => {
@@ -364,8 +389,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
 
         setOpenBlockId(null)
         void cleanupBlockIfEmpty(openId)
-        void classifyQuickNote(openId)
-    }, [cleanupBlockIfEmpty, classifyQuickNote])
+        void finalizeBlock(openId)
+    }, [cleanupBlockIfEmpty, finalizeBlock])
 
     const deleteBlock = useCallback(async (id: string) => {
         const isDeleted = await window.context.deleteBlock(id)
@@ -390,14 +415,15 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
             openBlockId,
             routingErrors,
             routingInProgressIds,
-            contentVersion
+            contentVersion,
+            assistantFocus
         }),
-        [blocks, blockContents, selectedBlockId, selectedBlock, openBlockId, routingErrors, routingInProgressIds, contentVersion]
+        [blocks, blockContents, selectedBlockId, selectedBlock, openBlockId, routingErrors, routingInProgressIds, contentVersion, assistantFocus]
     )
 
     const actionsValue: BlocksActions = useMemo(
-        () => ({ selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, applyNewGoalRouting, acknowledgeBlockInGoal, classifyBlock: classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
-        [selectBlock, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, applyNewGoalRouting, acknowledgeBlockInGoal, classifyQuickNote, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
+        () => ({ selectBlock, focusBlockFromAssistant, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, applyNewGoalRouting, acknowledgeBlockInGoal, classifyBlock: classifyQuickNote, finalizeBlock, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock }),
+        [selectBlock, focusBlockFromAssistant, submitQuickNote, saveBlock, updateBlockContent, createCaptureBlock, updateBlockCategories, applyBlockRouting, applyNewGoalRouting, acknowledgeBlockInGoal, classifyQuickNote, finalizeBlock, cleanupBlockIfEmpty, closeOpenBlock, deleteBlock]
     )
 
     return (

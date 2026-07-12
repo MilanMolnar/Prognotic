@@ -1,6 +1,8 @@
 import { ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+export { blockLabel } from './blockLabel'
+
 const dateFromatter = new Intl.DateTimeFormat(window.context.locale, {
     dateStyle: "short",
     timeStyle: "short",
@@ -14,14 +16,6 @@ export const formatDateFromMs = (ms: number): string => {
 
 export const cn = (...args: ClassValue[]): string => {
     return twMerge(clsx(args))
-}
-
-// Short display name for a block: the first words of its (already
-// markdown-stripped) excerpt. Placeholder until AI-generated block summaries
-// take over.
-export const blockLabel = (excerpt: string): string => {
-    const words = excerpt.split(/\s+/).filter(Boolean)
-    return words.slice(0, 5).join(' ') || 'untitled'
 }
 
 // Subsequence fuzzy match. Returns a relevance score (higher = better) or

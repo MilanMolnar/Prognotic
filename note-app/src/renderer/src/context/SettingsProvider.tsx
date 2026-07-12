@@ -1,4 +1,4 @@
-import { defaultSettings, maxPinnedGoals } from '@shared/constants'
+import { defaultDictationModeForPlatform, defaultSettings, maxPinnedGoals } from '@shared/constants'
 import { AppSettings } from '@shared/models'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
@@ -9,7 +9,10 @@ import {
 } from './SettingsContext'
 
 export const SettingsProvider = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
-    const [settings, setSettings] = useState<AppSettings>(defaultSettings)
+    const [settings, setSettings] = useState<AppSettings>(() => ({
+        ...defaultSettings,
+        dictationMode: defaultDictationModeForPlatform(window.context.platform)
+    }))
     const [isLoaded, setIsLoaded] = useState(false)
 
     useEffect(() => {

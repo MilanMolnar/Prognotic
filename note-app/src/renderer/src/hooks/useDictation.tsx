@@ -1,5 +1,6 @@
 import { useSettings } from '@renderer/context'
 import { DictationMode } from '@shared/models'
+import { useMacDictation } from './useMacDictation'
 import { useWindowsDictation } from './useWindowsDictation'
 import { useWisprFlowDictation } from './useWisprFlowDictation'
 
@@ -24,15 +25,16 @@ export type UseDictationResult = {
 
 const titles: Record<DictationMode, string> = {
     windows: 'Open Windows voice typing (Win+H)',
+    macos: 'Open macOS Dictation (Fn-D)',
     whisprflow: 'Wispr Flow dictation — click to start/stop'
 }
 
 export const dictationTitle = (mode: DictationMode, isListening: boolean): string => {
-    if (mode === 'windows') return titles.windows
+    if (mode !== 'whisprflow') return titles[mode]
     return isListening ? 'Stop dictation' : titles[mode]
 }
 
-// Routes dictation to the provider selected in Settings. Both hooks are
+// Routes dictation to the provider selected in Settings. All hooks are
 // mounted (rules of hooks); only the active mode's engine ever starts.
 export const useDictation = ({
     onFinalTranscript,
@@ -42,6 +44,7 @@ export const useDictation = ({
     const { dictationMode, hasWhisprflowApiKey } = settings
 
     const windows = useWindowsDictation({ focusInput })
+    const macos = useMacDictation({ focusInput })
     const wisprFlow = useWisprFlowDictation({
         onFinalTranscript,
         hasApiKey: hasWhisprflowApiKey
@@ -60,14 +63,15 @@ export const useDictation = ({
         }
     }
 
+    const native = dictationMode === 'macos' ? macos : windows
     return {
-        dictationMode: 'windows',
+        dictationMode,
         isListening: false,
         interimText: '',
-        error: windows.error,
-        notice: windows.notice,
-        isAvailable: windows.isAvailable,
-        toggle: windows.open,
-        stop: windows.stop
+        error: native.error,
+        notice: native.notice,
+        isAvailable: native.isAvailable,
+        toggle: native.open,
+        stop: native.stop
     }
 }

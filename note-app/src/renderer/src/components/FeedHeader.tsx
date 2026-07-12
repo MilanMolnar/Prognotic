@@ -1,4 +1,4 @@
-import { useBlocks, useGoals, useSearch, useSearchActions } from '@renderer/context'
+import { useBlocks, useGoals, useSearch, useSearchActions, useSettings } from '@renderer/context'
 import { blockLabel, cn } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { ComponentProps, JSX, KeyboardEvent } from 'react'
@@ -13,6 +13,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
   const { selectedBlockId, selectedBlock } = useBlocks()
   const { isSearchOpen, query } = useSearch()
   const { openSearch, closeSearch, setQuery } = useSearchActions()
+  const { settings } = useSettings()
 
   const isEditView = selectedBlockId !== null
   const categoryLabel =
@@ -23,7 +24,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
         : (goals?.find((goal) => goal.id === selectedCategory)?.name ?? 'Goal')
   const label = isEditView
     ? selectedBlock
-      ? blockLabel(selectedBlock.excerpt)
+      ? blockLabel(selectedBlock, settings.llm.aiBlockNameSummary)
       : '...'
     : categoryLabel
 

@@ -1,11 +1,12 @@
 import { AiActionDialog, BlockContextMenu } from '@/components'
-import { useAssistantActions, useBlockActions, useBlocks, useGoals } from '@renderer/context'
+import { useAssistant, useAssistantActions, useBlockActions, useBlockDragActions, useBlocks, useGoals, useSettings } from '@renderer/context'
 import { blockLabel, cn, formatDateFromMs } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { isBlockUnvisitedInGoal } from '@shared/goalPresence'
 import { BlockMeta, GoalPresenceSource } from '@shared/models'
-import { JSX, MouseEvent, useState } from 'react'
+import { JSX, MouseEvent, PointerEvent, useState } from 'react'
 import { FaRegTrashAlt } from 'react-icons/fa'
+import { LuGripVertical } from 'react-icons/lu'
 import { showBlockToast } from './blockToast'
 import { flyLabelToCategoryRow } from './categoryFlight'
 
@@ -13,7 +14,8 @@ const originLabels: Record<GoalPresenceSource, string> = {
   user: 'User',
   routed: 'AI-routing',
   assistant: 'AI-chat',
-  research: 'Research'
+  research: 'Research',
+  plugin: 'Plugin'
 }
 
 export type BlockCardProps = {
@@ -51,8 +53,13 @@ export const BlockCard = ({
     classifyBlock
   } = useBlockActions()
   const { routingErrors, routingInProgressIds } = useBlocks()
+  const { settings } = useSettings()
+  const { attachedBlockIds } = useAssistant()
   const { continueWithText } = useAssistantActions()
+  const { beginPress } = useBlockDragActions()
   const { goals, selectedCategory } = useGoals()
+  const displayLabel = blockLabel(block, settings.llm.aiBlockNameSummary)
+  const isAttached = attachedBlockIds.includes(block.id)
 
   const runAiAction = async (action: 'translate' | 'explain'): Promise<void> => {
     setAiFailure(null)
@@ -157,30 +164,35 @@ export const BlockCard = ({
     // bubble through the React tree, so nesting it would make menu clicks
     // trigger the card's onSelect.
     <>
+    {/* A regular wrapper keeps the drag handle centered independently of
+        the fieldset's special legend layout. */}
+    <div className="group relative min-w-0">
     {/* A fieldset so the legend timestamp sits in a real gap of the border
         line — no background masking needed over the translucent theme. */}
     <fieldset
       onClick={onSelect}
       onContextMenu={handleContextMenu}
-      style={isRouted && !isOpen ? { opacity: 0.5 } : undefined}
+      style={isRouted && !isOpen && !isAttached ? { opacity: 0.5 } : undefined}
       className={cn(
-        'group relative min-w-0 cursor-pointer rounded-md border px-3 pb-2 transition-colors duration-100',
+        'relative min-w-0 cursor-pointer rounded-md border px-3 pb-2 transition-[border-color,box-shadow,opacity] duration-100',
         // While its context menu is open the card shares the menu's darker
         // background, marking which block the actions target.
         menuPosition !== null && 'bg-zinc-900/95',
-        isOpen
-          ? 'border-yellow-500/50'
-          : isMatch
-            ? 'border-yellow-500/30'
-            : 'border-white/10 hover:border-white/25'
-        , isRouted && !isOpen && 'opacity-50 hover:opacity-70'
+        isAttached
+          ? 'border-yellow-300/80 shadow-[0_0_0_1px_rgb(250_204_21_/_0.25),0_0_16px_rgb(234_179_8_/_0.3)]'
+          : isOpen
+            ? 'border-yellow-500/50'
+            : isMatch
+              ? 'border-yellow-500/30'
+              : 'border-white/10 hover:border-white/25',
+        isRouted && !isOpen && !isAttached && 'opacity-50 hover:opacity-70'
       )}
     >
       {/* Full-width legend: short name in the left border gap, date in the
           right one, with the border line re-drawn between them. border-inherit
           chains the fieldset's (possibly yellow) border color through. */}
       <legend className="ml-1.5 flex w-[calc(100%-12px)] items-center gap-1.5 border-inherit px-0 text-xs font-light text-zinc-500">
-        <span className="min-w-0 truncate">{blockLabel(block.excerpt)}</span>
+        <span className="min-w-0 truncate">{displayLabel}</span>
         <span className="min-w-3 flex-1 border-t border-inherit" />
         <span className="shrink-0">{date}</span>
         {isUnvisited && <button
@@ -262,6 +274,34 @@ export const BlockCard = ({
         {originLabel}
       </span>}
     </fieldset>
+    <button
+      type="button"
+      draggable={false}
+      title="Hold and drag note"
+      aria-label={`Hold and drag ${displayLabel}`}
+      onPointerDown={(event: PointerEvent<HTMLButtonElement>) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (event.button !== 0) return
+        event.currentTarget.setPointerCapture(event.pointerId)
+        beginPress({
+          blockId: block.id,
+          label: displayLabel,
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY
+        })
+      }}
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+      className="no-drag absolute -left-2 top-1/2 z-20 flex h-6 w-3.5 -translate-y-[calc(50%-4px)] touch-none cursor-grab items-center justify-center rounded border border-white/10 bg-zinc-900/95 text-zinc-400 shadow-sm transition-[color,border-color] hover:border-yellow-500/50 hover:text-yellow-400 active:cursor-grabbing"
+    >
+      <LuGripVertical className="h-3.5 w-3.5" />
+    </button>
+    </div>
     {menuPosition && (
       <BlockContextMenu
         block={block}

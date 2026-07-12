@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, OnAssistantStreamEvent, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetPlugins, GetSettings, OnAssistantStreamEvent, OpenPluginsFolder, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, WriteBlock, WriteClipboardText } from '@shared/types'
 
 declare global {
   interface Window {
@@ -28,16 +28,28 @@ declare global {
       deleteGoal: DeleteGoal
       transcribeAudio: TranscribeAudio
       toggleWindowsDictation: ToggleWindowsDictation
+      toggleMacDictation: ToggleMacDictation
+      writeClipboardText: WriteClipboardText
       getLlmModels: GetLlmModels
       testLlmConnection: TestLlmConnection
+      testImageRecognitionConnection: TestImageRecognitionConnection
+      recognizeImage: RecognizeImage
       startAssistantStream: StartAssistantStream
       cancelAssistantStream: CancelAssistantStream
       onAssistantStreamEvent: OnAssistantStreamEvent
       classifyBlock: ClassifyBlock
+      summarizeBlockName: SummarizeBlockName
       runInlineAction: RunInlineAction
       polishTranscript: PolishTranscript
       getAssistantConversations: GetAssistantConversations
       saveAssistantConversations: SaveAssistantConversations
+      getPlugins: GetPlugins
+      setPluginEnabled: SetPluginEnabled
+      setPluginConfig: SetPluginConfig
+      removePlugin: RemovePlugin
+      openPluginsFolder: OpenPluginsFolder
+      runPluginCommand: RunPluginCommand
+      callPluginHost: CallPluginHost
     }
   }
 }

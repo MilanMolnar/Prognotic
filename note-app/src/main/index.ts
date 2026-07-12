@@ -1,12 +1,14 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, BrowserWindowConstructorOptions, ipcMain, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, BrowserWindowConstructorOptions, clipboard, ipcMain, session, shell, systemPreferences } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, applyNewGoalRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setSettings, updateBlockCategories, writeBlock } from './lib'
+import { toggleMacDictation } from './dictation/macos'
 import { toggleWindowsDictation } from './dictation/windows'
 import { transcribeAudio } from './dictation/wisprflow'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetSettings, PolishTranscript, ReadBlock, RenameGoal, RunInlineAction, SaveAssistantConversations, SetCredential, SetSettings, StartAssistantStream, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock } from '@shared/types'
-import { classifyBlock, listModels, polishTranscript, runInlineAction, streamAssistant, testConnection } from './llm/router'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetPlugins, GetSettings, OpenPluginsFolder, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock, WriteClipboardText } from '@shared/types'
+import { classifyBlock, listModels, polishTranscript, recognizeImage, runInlineAction, streamAssistant, summarizeBlockName, testConnection, testImageRecognitionConnection } from './llm/router'
+import { callPluginHost, ensurePluginsDirectory, initializePlugins, refreshPluginCatalog, removePlugin, runPluginCommand, setPluginConfig, setPluginEnabled } from './plugins'
 
 const assistantStreams = new Map<string, AbortController>()
 
@@ -97,6 +99,12 @@ app.whenReady().then(async () => {
     return permission === 'media'
   })
 
+  try {
+    await initializePlugins()
+  } catch (error) {
+    console.error('Could not initialize plugins.', error)
+  }
+
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
@@ -124,18 +132,56 @@ app.whenReady().then(async () => {
   ipcMain.handle('deleteGoal', (_, ...args: Parameters<DeleteGoal>) => deleteGoal(...args))
   ipcMain.handle('transcribeAudio', (_, ...args: Parameters<TranscribeAudio>) => transcribeAudio(...args))
   ipcMain.handle('toggleWindowsDictation', (event) => toggleWindowsDictation(event.sender))
+  ipcMain.handle('toggleMacDictation', (event) => toggleMacDictation(event.sender))
+  ipcMain.handle('writeClipboardText', (_, text: Parameters<WriteClipboardText>[0]) => {
+    if (typeof text !== 'string') throw new TypeError('Clipboard text must be a string.')
+    clipboard.writeText(text)
+  })
   ipcMain.handle('getLlmModels', async (_, ...args: Parameters<GetLlmModels>) => {
     try { return { models: await listModels(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'Could not load models.' } }
   })
   ipcMain.handle('testLlmConnection', async (): Promise<Awaited<ReturnType<TestLlmConnection>>> => {
-    try { await testConnection(); return { ok: true } } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Connection test failed.' } }
+    try {
+      const verifiedConnection = await testConnection()
+      const latest = await getSettings()
+      await setSettings({ llm: { ...latest.llm, verifiedConnection } })
+      return { ok: true }
+    } catch (error) {
+      try {
+        const latest = await getSettings()
+        await setSettings({ llm: { ...latest.llm, verifiedConnection: undefined } })
+      } catch {
+        // Preserve the connection-test error if verification invalidation fails.
+      }
+      return { ok: false, error: error instanceof Error ? error.message : 'Connection test failed.' }
+    }
+  })
+  ipcMain.handle('testImageRecognitionConnection', async (): Promise<Awaited<ReturnType<TestImageRecognitionConnection>>> => {
+    try {
+      const verifiedImageRecognitionConnection = await testImageRecognitionConnection()
+      const latest = await getSettings()
+      await setSettings({ llm: { ...latest.llm, verifiedImageRecognitionConnection } })
+      return { ok: true }
+    } catch (error) {
+      try {
+        const latest = await getSettings()
+        await setSettings({ llm: { ...latest.llm, verifiedImageRecognitionConnection: undefined } })
+      } catch {
+        // Preserve the connection-test error if verification invalidation fails.
+      }
+      return { ok: false, error: error instanceof Error ? error.message : 'Image connection test failed.' }
+    }
+  })
+  ipcMain.handle('recognizeImage', async (_, ...args: Parameters<RecognizeImageIpc>): Promise<Awaited<ReturnType<RecognizeImageIpc>>> => {
+    try { return { text: await recognizeImage(...args) } }
+    catch (error) { return { error: error instanceof Error ? error.message : 'Image recognition failed.' } }
   })
   ipcMain.handle('startAssistantStream', async (event, requestId: Parameters<StartAssistantStream>[0], message: Parameters<StartAssistantStream>[1], history: Parameters<StartAssistantStream>[2], scope: Parameters<StartAssistantStream>[3], selection: Parameters<StartAssistantStream>[4]) => {
     if (assistantStreams.has(requestId)) return { ok: false, error: 'An assistant request with this id is already running.' }
     const controller = new AbortController()
     assistantStreams.set(requestId, controller)
     void streamAssistant(message, history, scope, selection, { signal: controller.signal, onToken: (text) => event.sender.send('assistantStreamEvent', { requestId, type: 'token', text }) })
-      .then(({ citedBlockIds, readGoalLabels }) => event.sender.send('assistantStreamEvent', { requestId, type: 'done', citedBlockIds, readGoalLabels }))
+      .then(({ citedBlockIds, citedBlockCategoryIds, readGoalLabels }) => event.sender.send('assistantStreamEvent', { requestId, type: 'done', citedBlockIds, citedBlockCategoryIds, readGoalLabels }))
       .catch((error) => { if (!controller.signal.aborted) event.sender.send('assistantStreamEvent', { requestId, type: 'error', message: error instanceof Error ? error.message : 'Assistant request failed.' }) })
       .finally(() => assistantStreams.delete(requestId))
     return { ok: true }
@@ -145,10 +191,28 @@ app.whenReady().then(async () => {
     try { return { block: await classifyBlock(...args) } }
     catch (error) { return { block: null, error: error instanceof Error ? error.message : 'Could not classify this note.' } }
   })
+  ipcMain.handle('summarizeBlockName', async (_, ...args: Parameters<SummarizeBlockName>) => {
+    try { return { block: await summarizeBlockName(...args) } }
+    catch (error) { return { block: null, error: error instanceof Error ? error.message : 'Could not name this note.' } }
+  })
   ipcMain.handle('runInlineAction', async (_, ...args: Parameters<RunInlineAction>) => { try { return { text: await runInlineAction(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'AI action failed.' } } })
   ipcMain.handle('polishTranscript', async (_, ...args: Parameters<PolishTranscript>) => { try { return { text: await polishTranscript(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'Transcript cleanup failed.' } } })
   ipcMain.handle('getAssistantConversations', (_, ...args: Parameters<GetAssistantConversations>) => getAssistantConversations(...args))
   ipcMain.handle('saveAssistantConversations', (_, ...args: Parameters<SaveAssistantConversations>) => saveAssistantConversations(...args))
+  ipcMain.handle('getPlugins', (_, ...args: Parameters<GetPlugins>) => refreshPluginCatalog(...args))
+  ipcMain.handle('setPluginEnabled', (_, ...args: Parameters<SetPluginEnabled>) => setPluginEnabled(...args))
+  ipcMain.handle('setPluginConfig', (_, ...args: Parameters<SetPluginConfig>) => setPluginConfig(...args))
+  ipcMain.handle('removePlugin', (_, ...args: Parameters<RemovePlugin>) => removePlugin(...args))
+  ipcMain.handle('openPluginsFolder', async (): Promise<Awaited<ReturnType<OpenPluginsFolder>>> => {
+    try {
+      const error = await shell.openPath(await ensurePluginsDirectory())
+      return error ? { ok: false, error: 'Could not open the plugins folder.' } : { ok: true }
+    } catch {
+      return { ok: false, error: 'Could not open the plugins folder.' }
+    }
+  })
+  ipcMain.handle('runPluginCommand', (_, ...args: Parameters<RunPluginCommand>) => runPluginCommand(...args))
+  ipcMain.handle('callPluginHost', (_, ...args: Parameters<CallPluginHost>) => callPluginHost(...args))
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

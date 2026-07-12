@@ -1,9 +1,13 @@
 import { DictationButton } from '@renderer/components/DictationButton'
+import { ImageRecognitionButton } from '@renderer/components/ImageRecognitionButton'
+import { ImageRecognitionModal } from '@renderer/components/ImageRecognitionModal'
+import { useImageRecognition } from '@renderer/hooks/useImageRecognition'
 import { MarkdownFormat, useQuickInput } from '@renderer/hooks/useQuickInput'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
 import { useTranscriptPolish } from '@renderer/hooks/useTranscriptPolish'
 import { useBlockActions, useBlocks, useGoals, useSettings } from '@renderer/context'
 import { blockLabel, cn } from '@renderer/utils'
+import { isImageRecognitionReady, isLlmSelectionVerified } from '@shared/llmSettings'
 import { ComponentProps, JSX, useCallback, useEffect } from 'react'
 import { IconType } from 'react-icons'
 import { LuBold, LuCheck, LuCode, LuHeading2, LuItalic, LuList, LuSend } from 'react-icons/lu'
@@ -36,19 +40,42 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   }, [textareaRef])
 
   const { acceptTranscript, retryPolish, useOriginal, polishError, isPolishing, hasPendingTranscript } =
-    useTranscriptPolish({ enabled: settings.llm.polishDictation, onAccepted: appendTranscript })
+    useTranscriptPolish({
+      enabled: settings.llm.polishDictation && isLlmSelectionVerified(settings.llm),
+      onAccepted: appendTranscript
+    })
 
   const { dictationMode, isListening, interimText, error, notice, isAvailable, toggle, stop } =
     useDictation({ onFinalTranscript: (text) => { void acceptTranscript(text) }, focusInput: focusCaptureInput })
 
+  const {
+    isModalOpen: isImageModalOpen,
+    isRecognizing,
+    recognitionError,
+    hasPendingRequest: hasPendingImage,
+    openModal: openImageModal,
+    closeModal: closeImageModal,
+    submitImage,
+    retryRecognition
+  } = useImageRecognition({ onRecognized: appendTranscript })
+  const isImageRecognitionAvailable = isImageRecognitionReady(settings.llm)
+
   // Stop dictation when the bar becomes inert or the draft is sent.
   useEffect(() => {
-    if (isEditingBlock || isSubmitting) stop()
-  }, [isEditingBlock, isSubmitting, stop])
+    if (isEditingBlock || isSubmitting) {
+      stop()
+      closeImageModal()
+    }
+  }, [closeImageModal, isEditingBlock, isSubmitting, stop])
 
   const handleDictationClick = useCallback((): void => {
     toggle()
   }, [toggle])
+
+  const handleImageRecognitionClick = useCallback((): void => {
+    stop()
+    openImageModal()
+  }, [openImageModal, stop])
 
   // Mirrors submitQuickNote's targeting: the open block receives the append
   // only while its window is active (provider clears openBlockId on expiry)
@@ -57,7 +84,10 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   const appendTarget =
     openTarget && openTarget.categories.includes(selectedCategory) ? openTarget : undefined
 
-  const statusMessage = polishError ?? (isPolishing ? 'Polishing transcript...' : error ?? notice)
+  const statusMessage = recognitionError ?? (isRecognizing
+    ? 'Recognizing image text...'
+    : polishError ?? (isPolishing ? 'Polishing transcript...' : error ?? notice))
+  const hasStatusError = recognitionError !== null || polishError !== null || error !== null
 
   return (
     <form
@@ -80,7 +110,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
             appendTarget ? 'text-yellow-600/80' : 'text-zinc-500'
           )}
         >
-          {appendTarget ? blockLabel(appendTarget.excerpt) : 'new'}
+          {appendTarget ? blockLabel(appendTarget, settings.llm.aiBlockNameSummary) : 'new'}
         </legend>
         <div className="flex items-center gap-0.5 px-2 pt-0.5">
           {formatButtons.map(({ format, title, Icon }) => (
@@ -102,6 +132,12 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
             title={dictationTitle(dictationMode, isListening)}
             onClick={handleDictationClick}
           />
+          <ImageRecognitionButton
+            isAvailable={isImageRecognitionAvailable}
+            isRecognizing={isRecognizing}
+            disabled={isEditingBlock || isSubmitting}
+            onClick={handleImageRecognitionClick}
+          />
           <span className="flex-1" />
           <button
             type="submit"
@@ -114,7 +150,8 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
         </div>
         {(isListening && interimText) || statusMessage ? (
           <div className="flex items-center gap-2 px-3 pt-0.5 text-xs" aria-live="polite">
-            <span className={cn(polishError || error ? 'text-red-400/90' : notice || isPolishing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage ?? interimText}</span>
+            <span className={cn(hasStatusError ? 'text-red-400/90' : notice || isPolishing || isRecognizing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage ?? interimText}</span>
+            {recognitionError && hasPendingImage && <button type="button" onClick={retryRecognition} disabled={isRecognizing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button>}
             {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">Use original</button></>}
           </div>
         ) : null}
@@ -143,6 +180,12 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
           </button>
         </div>
       </fieldset>
+      {isImageModalOpen && <ImageRecognitionModal
+        isSubmitting={isRecognizing}
+        recognitionError={recognitionError}
+        onClose={closeImageModal}
+        onSubmit={submitImage}
+      />}
     </form>
   )
 }
