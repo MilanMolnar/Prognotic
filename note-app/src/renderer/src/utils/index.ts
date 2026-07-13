@@ -3,14 +3,13 @@ import { twMerge } from 'tailwind-merge'
 
 export { blockLabel } from './blockLabel'
 
-const dateFromatter = new Intl.DateTimeFormat(window.context.locale, {
+const dateFormatter = new Intl.DateTimeFormat(window.context.locale, {
     dateStyle: "short",
     timeStyle: "short",
-    timeZone: "CET",
 })
 
 export const formatDateFromMs = (ms: number): string => {
-    return dateFromatter.format(ms)
+    return dateFormatter.format(ms)
 }
 
 

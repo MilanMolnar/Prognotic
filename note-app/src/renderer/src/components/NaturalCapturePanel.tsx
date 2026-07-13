@@ -86,7 +86,7 @@ export const NaturalCapturePanel = ({
   if (!feedBlocks) return null
 
   return (
-    <div ref={scrollRef} className={cn('overflow-y-auto', className)} {...props}>
+    <div data-tour="block-feed" ref={scrollRef} className={cn('overflow-y-auto', className)} {...props}>
       <div className="relative border-b border-white/10 pb-1">
         {openTarget && (
           <span
@@ -107,8 +107,8 @@ export const NaturalCapturePanel = ({
       </div>
       {closedBlocks.length > 0 && (
         <ul className="mt-4 space-y-3">
-          {closedBlocks.map((block) => (
-            <li key={block.id} ref={registerItemRef(block.id)}>
+          {closedBlocks.map((block, index) => (
+            <li data-tour={index === 0 ? 'newest-block' : undefined} key={block.id} ref={registerItemRef(block.id)}>
               <BlockCard
                 block={block}
                 content={blockContents[block.id]}

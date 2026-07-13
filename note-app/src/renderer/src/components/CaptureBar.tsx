@@ -1,6 +1,9 @@
 import { DictationButton } from '@renderer/components/DictationButton'
+import { DocumentCaptureButton } from '@renderer/components/DocumentCaptureButton'
+import { DocumentCaptureModal } from '@renderer/components/DocumentCaptureModal'
 import { ImageRecognitionButton } from '@renderer/components/ImageRecognitionButton'
 import { ImageRecognitionModal } from '@renderer/components/ImageRecognitionModal'
+import { useDocumentCapture } from '@renderer/hooks/useDocumentCapture'
 import { useImageRecognition } from '@renderer/hooks/useImageRecognition'
 import { MarkdownFormat, useQuickInput } from '@renderer/hooks/useQuickInput'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
@@ -27,9 +30,9 @@ export type CaptureBarProps = ComponentProps<'form'>
 // block the next submit appends to — or "new" when it will start a fresh one.
 // Faded and inert while a block is open in the editor.
 export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Element => {
-  const { text, setText, isSubmitting, textareaRef, submit, handleKeyDown, applyFormat, appendTranscript } =
+  const { text, setText, isSubmitting, textareaRef, submit, handleKeyDown, applyFormat, appendTranscript, appendDocument } =
     useQuickInput()
-  const { blocks, openBlockId, selectedBlockId } = useBlocks()
+  const { blocks, blockContents, openBlockId, selectedBlockId } = useBlocks()
   const { settings } = useSettings()
   const { closeOpenBlock } = useBlockActions()
   const { selectedCategory } = useGoals()
@@ -59,14 +62,37 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
     retryRecognition
   } = useImageRecognition({ onRecognized: appendTranscript })
   const isImageRecognitionAvailable = isImageRecognitionReady(settings.llm)
+  const {
+    isModalOpen: isDocumentModalOpen,
+    isParsing: isParsingDocument,
+    isSummarizing: isSummarizingDocument,
+    parseError: documentParseError,
+    summaryError: documentSummaryError,
+    parsedDocument,
+    summaryText: documentSummaryText,
+    summaryInputTruncated,
+    hasPendingParse,
+    hasPendingSummary,
+    openModal: openDocumentModal,
+    closeModal: closeDocumentModal,
+    resetDocument,
+    clearSummary,
+    submitDocument,
+    retryParse,
+    summarize,
+    retrySummary,
+    insertText: insertDocumentText
+  } = useDocumentCapture({ onInsert: appendDocument })
+  const isTextLlmAvailable = isLlmSelectionVerified(settings.llm)
 
   // Stop dictation when the bar becomes inert or the draft is sent.
   useEffect(() => {
     if (isEditingBlock || isSubmitting) {
       stop()
       closeImageModal()
+      closeDocumentModal()
     }
-  }, [closeImageModal, isEditingBlock, isSubmitting, stop])
+  }, [closeDocumentModal, closeImageModal, isEditingBlock, isSubmitting, stop])
 
   const handleDictationClick = useCallback((): void => {
     toggle()
@@ -74,8 +100,15 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
 
   const handleImageRecognitionClick = useCallback((): void => {
     stop()
+    closeDocumentModal()
     openImageModal()
-  }, [openImageModal, stop])
+  }, [closeDocumentModal, openImageModal, stop])
+
+  const handleDocumentCaptureClick = useCallback((): void => {
+    stop()
+    closeImageModal()
+    openDocumentModal()
+  }, [closeImageModal, openDocumentModal, stop])
 
   // Mirrors submitQuickNote's targeting: the open block receives the append
   // only while its window is active (provider clears openBlockId on expiry)
@@ -83,6 +116,9 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   const openTarget = openBlockId ? blocks?.find((block) => block.id === openBlockId) : undefined
   const appendTarget =
     openTarget && openTarget.categories.includes(selectedCategory) ? openTarget : undefined
+  const isDocumentTargetReady = !appendTarget || blockContents[appendTarget.id] !== undefined
+  const appendTargetContentChars = appendTarget ? (blockContents[appendTarget.id]?.length ?? 0) : 0
+  const pendingBlockSeparatorChars = appendTargetContentChars > 0 ? 2 : 0
 
   const statusMessage = recognitionError ?? (isRecognizing
     ? 'Recognizing image text...'
@@ -112,7 +148,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
         >
           {appendTarget ? blockLabel(appendTarget, settings.llm.aiBlockNameSummary) : 'new'}
         </legend>
-        <div className="flex items-center gap-0.5 px-2 pt-0.5">
+        <div data-tour="capture-tools" className="flex items-center gap-0.5 px-2 pt-0.5">
           {formatButtons.map(({ format, title, Icon }) => (
             <button
               key={format}
@@ -138,6 +174,11 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
             disabled={isEditingBlock || isSubmitting}
             onClick={handleImageRecognitionClick}
           />
+          <DocumentCaptureButton
+            isProcessing={isParsingDocument || isSummarizingDocument}
+            disabled={isEditingBlock || isSubmitting || !isDocumentTargetReady}
+            onClick={handleDocumentCaptureClick}
+          />
           <span className="flex-1" />
           <button
             type="submit"
@@ -156,6 +197,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
           </div>
         ) : null}
         <textarea
+          data-tour="capture-input"
           ref={textareaRef}
           rows={2}
           value={text}
@@ -185,6 +227,27 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
         recognitionError={recognitionError}
         onClose={closeImageModal}
         onSubmit={submitImage}
+      />}
+      {isDocumentModalOpen && <DocumentCaptureModal
+        isParsing={isParsingDocument}
+        isSummarizing={isSummarizingDocument}
+        parseError={documentParseError}
+        summaryError={documentSummaryError}
+        parsedDocument={parsedDocument}
+        summaryText={documentSummaryText}
+        summaryInputTruncated={summaryInputTruncated}
+        hasPendingParse={hasPendingParse}
+        hasPendingSummary={hasPendingSummary}
+        aiAvailable={isTextLlmAvailable}
+        currentContentChars={text.length + appendTargetContentChars + pendingBlockSeparatorChars}
+        onClose={closeDocumentModal}
+        onResetDocument={resetDocument}
+        onClearSummary={clearSummary}
+        onSubmit={submitDocument}
+        onRetryParse={retryParse}
+        onSummarize={summarize}
+        onRetrySummary={retrySummary}
+        onInsert={insertDocumentText}
       />}
     </form>
   )

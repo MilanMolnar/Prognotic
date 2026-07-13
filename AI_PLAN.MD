@@ -22,11 +22,12 @@ The AI assistant is implemented as a local-first Electron feature. All provider 
 | Goal management | Context menu supports rename, edit description, and delete |
 | Failure recovery | Routing, inline actions, assistant requests, and transcript polish expose errors and retry paths |
 | Automated tests | Vitest coverage for stream parsing, note ranking, routing fallback/presentation/history, and persistence migration helpers |
+| Note-driven calendar | Vault-wide deterministic backfill plus verified-LLM extraction, validation and uncertain-time resolution, local persistence, and opt-in two-way Google Calendar sync |
 
 ## Architecture
 
 ```text
-Renderer: SettingsProvider / BlocksProvider / AssistantProvider
+Renderer: SettingsProvider / CalendarProvider / BlocksProvider / AssistantProvider
     -> preload contextBridge
     -> main IPC handlers
     -> main/llm/router.ts

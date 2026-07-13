@@ -7,6 +7,10 @@ export const isLlmSelectionVerified = (
     settings.verifiedConnection?.provider === settings.provider &&
     settings.verifiedConnection.model === settings.model
 
+export const resolvePluginWizardModel = (
+    settings: Pick<LlmSettings, 'model' | 'pluginWizardModel'>
+): string => settings.pluginWizardModel.trim() || settings.model.trim()
+
 export const isImageRecognitionSelectionVerified = (
     settings: Pick<LlmSettings, 'provider' | 'imageRecognitionModel' | 'verifiedImageRecognitionConnection'>
 ): boolean => settings.imageRecognitionModel.length > 0 &&

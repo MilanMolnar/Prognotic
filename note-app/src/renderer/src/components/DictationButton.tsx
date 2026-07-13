@@ -21,6 +21,7 @@ export const DictationButton = ({
 
     return (
         <button
+            data-tour="dictation"
             type="button"
             title={title}
             disabled={disabled || !isAvailable}

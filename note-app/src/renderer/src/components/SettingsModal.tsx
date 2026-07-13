@@ -1,4 +1,4 @@
-import { useSettings, useSettingsActions } from '@renderer/context'
+import { useCalendarActions, useSettings, useSettingsActions } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { isImageRecognitionSelectionVerified, isLlmSelectionVerified } from '@shared/llmSettings'
 import { DictationMode, LlmProvider } from '@shared/models'
@@ -6,6 +6,7 @@ import { LlmModel } from '@shared/types'
 import { filterVisionModels, isImageRecognitionAvailable } from '@shared/vision'
 import { JSX, useEffect, useState } from 'react'
 import { LuCheck } from 'react-icons/lu'
+import { dispatchOnboardingEvent, onboardingEvents } from '@renderer/onboarding/events'
 import { SettingInfoButton } from './SettingInfoButton'
 import { SettingInfoModal } from './SettingInfoModal'
 import { PluginManagerModal } from './PluginManagerModal'
@@ -47,7 +48,11 @@ const settingHelp = {
   },
   activeModel: {
     title: 'Active model',
-    body: 'Sets the global default model for routing, inline actions, optional AI features, and new assistant conversations. A model must be selected before the connection can be tested. Verification belongs to the exact provider and model pair shown here. Changing the selection leaves checked opt-ins intact but disables them until the pair is verified.'
+    body: 'Sets the global default model for routing, inline actions, optional AI features, new assistant conversations, and the AI Plugin Wizard when its selector is set to Active model. A model must be selected before the connection can be tested. Verification belongs to the exact provider and model pair shown here. Changing the selection leaves checked opt-ins intact but disables them until the pair is verified.'
+  },
+  pluginWizardModel: {
+    title: 'AI Plugin Wizard model',
+    body: 'Selects the model used for the plugin interview and plugin code generation. Active model is the default and follows the global model selection automatically. A specific override still uses the current provider and credential, and the active connection must pass Test connection before the wizard can run. Changing providers resets this override to Active model.'
   },
   testConnection: {
     title: 'Test connection',
@@ -152,11 +157,13 @@ const keyStatus = (provider: LlmProvider, settings: ReturnType<typeof useSetting
 export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
   const { settings } = useSettings()
   const { updateSettings } = useSettingsActions()
+  const { configureGoogle, connectGoogle, disconnectGoogle, syncGoogleNow } = useCalendarActions()
   const dictationOptions = dictationOptionsForPlatform(window.context.platform)
   const [blockWindowMinutes, setBlockWindowMinutes] = useState(String(settings.blockWindowMinutes))
   const [dictationMode, setDictationMode] = useState<DictationMode>(settings.dictationMode)
   const [provider, setProvider] = useState<LlmProvider>(settings.llm.provider)
   const [model, setModel] = useState(settings.llm.model)
+  const [pluginWizardModel, setPluginWizardModel] = useState(settings.llm.pluginWizardModel)
   const [imageRecognitionModel, setImageRecognitionModel] = useState(settings.llm.imageRecognitionModel)
   const [localBaseUrl, setLocalBaseUrl] = useState(settings.llm.localBaseUrl)
   const [polishDictation, setPolishDictation] = useState(settings.llm.polishDictation)
@@ -171,16 +178,33 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
   const [isTestingImageRecognition, setIsTestingImageRecognition] = useState(false)
   const [activeHelp, setActiveHelp] = useState<SettingHelp | null>(null)
   const [isPluginManagerOpen, setIsPluginManagerOpen] = useState(false)
+  const [googleEnabled, setGoogleEnabled] = useState(settings.googleCalendar.enabled)
+  const [googlePushEnabled, setGooglePushEnabled] = useState(settings.googleCalendar.pushEnabled)
+  const [googlePullEnabled, setGooglePullEnabled] = useState(settings.googleCalendar.pullEnabled)
+  const [googleAutoSyncMinutes, setGoogleAutoSyncMinutes] = useState(settings.googleCalendar.autoSyncMinutes)
+  const [googleClientId, setGoogleClientId] = useState('')
+  const [googleClientSecret, setGoogleClientSecret] = useState('')
+  const [showGoogleOAuthFields, setShowGoogleOAuthFields] = useState(!settings.googleCalendar.hasOAuthClient)
+  const [googleStatus, setGoogleStatus] = useState<Status | null>(null)
+  const [isGoogleWorking, setIsGoogleWorking] = useState(false)
 
   const draftLlm = {
     provider,
     model,
+    pluginWizardModel,
     imageRecognitionModel,
     localBaseUrl,
     polishDictation,
     aiBlockNameSummary,
     verifiedConnection: settings.llm.verifiedConnection,
     verifiedImageRecognitionConnection: settings.llm.verifiedImageRecognitionConnection
+  }
+  const draftGoogleCalendar = {
+    ...settings.googleCalendar,
+    enabled: googleEnabled,
+    pushEnabled: googlePushEnabled,
+    pullEnabled: googlePullEnabled,
+    autoSyncMinutes: googleAutoSyncMinutes
   }
   const isVerifiedForCurrentSelection = isLlmSelectionVerified(draftLlm)
   const isImageRecognitionVerified = isImageRecognitionSelectionVerified(draftLlm)
@@ -209,6 +233,18 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeHelp, isPluginManagerOpen, onClose])
 
+  useEffect(() => {
+    window.addEventListener(onboardingEvents.closeSettingsModal, onClose)
+    return () => window.removeEventListener(onboardingEvents.closeSettingsModal, onClose)
+  }, [onClose])
+
+  useEffect(() => {
+    dispatchOnboardingEvent(onboardingEvents.providerChanged, { provider })
+    dispatchOnboardingEvent(onboardingEvents.visionModelChanged, {
+      hasVisionModel: imageRecognitionModel.length > 0
+    })
+  }, [imageRecognitionModel, provider])
+
   const refreshModels = async (): Promise<void> => {
     setIsLoadingModels(true)
     setStatus(null)
@@ -227,6 +263,9 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
       }
       setModels(result.models)
       if (!result.models.some((item) => item.id === model)) setModel(result.models[0]?.id ?? '')
+      if (pluginWizardModel && !result.models.some((item) => item.id === pluginWizardModel)) {
+        setPluginWizardModel('')
+      }
       const nextVisionModels = filterVisionModels(provider, result.models)
       if (!nextVisionModels.some((item) => item.id === imageRecognitionModel)) {
         setImageRecognitionModel(nextVisionModels[0]?.id ?? '')
@@ -242,11 +281,79 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
   const handleSave = async (): Promise<void> => {
     const parsed = Math.round(Number(blockWindowMinutes))
     const minutes = Number.isFinite(parsed) && parsed >= 1 ? parsed : settings.blockWindowMinutes
-    await updateSettings({ blockWindowMinutes: minutes, dictationMode, llm: draftLlm })
+    if (googleClientId.trim()) {
+      const configured = await configureGoogle(googleClientId, googleClientSecret)
+      if (!configured.ok) {
+        setGoogleStatus({ message: configured.error ?? 'Could not save Google OAuth configuration.', tone: 'error' })
+        return
+      }
+    }
+    await updateSettings({
+      blockWindowMinutes: minutes,
+      dictationMode,
+      llm: draftLlm,
+      googleCalendar: draftGoogleCalendar
+    })
     if (apiKey.trim()) await window.context.setCredential(provider, apiKey)
     if (wisprKey.trim()) await window.context.setCredential('whisprflow', wisprKey)
     if (apiKey.trim() || wisprKey.trim()) await updateSettings({})
+    dispatchOnboardingEvent(onboardingEvents.settingsSaved)
     onClose()
+  }
+
+  const handleGoogleConnect = async (): Promise<void> => {
+    if (isGoogleWorking) return
+    setIsGoogleWorking(true)
+    setGoogleStatus({ message: 'Opening Google authorization…', tone: 'neutral' })
+    try {
+      if (googleClientId.trim()) {
+        const configured = await configureGoogle(googleClientId, googleClientSecret)
+        if (!configured.ok) {
+          setGoogleStatus({ message: configured.error ?? 'Could not save Google OAuth configuration.', tone: 'error' })
+          return
+        }
+      }
+      const result = await connectGoogle()
+      setGoogleStatus(result.ok
+        ? { message: 'Google Calendar connected.', tone: 'success' }
+        : { message: result.error ?? 'Could not connect Google Calendar.', tone: 'error' })
+      if (result.ok) {
+        setGoogleClientId('')
+        setGoogleClientSecret('')
+        setShowGoogleOAuthFields(false)
+      }
+    } finally {
+      setIsGoogleWorking(false)
+    }
+  }
+
+  const handleGoogleDisconnect = async (): Promise<void> => {
+    if (isGoogleWorking) return
+    setIsGoogleWorking(true)
+    try {
+      const result = await disconnectGoogle()
+      setGoogleStatus(result.ok && !result.error
+        ? { message: 'Google Calendar disconnected.', tone: 'success' }
+        : { message: result.error ?? 'Could not disconnect Google Calendar.', tone: 'error' })
+      if (result.ok) setGoogleEnabled(false)
+    } finally {
+      setIsGoogleWorking(false)
+    }
+  }
+
+  const handleGoogleSync = async (): Promise<void> => {
+    if (isGoogleWorking) return
+    setIsGoogleWorking(true)
+    setGoogleStatus({ message: 'Syncing Google Calendar…', tone: 'neutral' })
+    try {
+      await updateSettings({ googleCalendar: draftGoogleCalendar })
+      const result = await syncGoogleNow()
+      setGoogleStatus(result.ok
+        ? { message: 'Google Calendar sync completed.', tone: 'success' }
+        : { message: result.error ?? 'Google Calendar sync failed.', tone: 'error' })
+    } finally {
+      setIsGoogleWorking(false)
+    }
   }
 
   const testConnection = async (): Promise<void> => {
@@ -340,26 +447,26 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
 
       <fieldset className="mt-6 border-t border-white/10 pt-4"><legend className="text-sm font-medium text-zinc-200"><span className="inline-flex items-center gap-1">AI assistant<SettingInfoButton settingName={settingHelp.aiAssistant.title} onOpen={() => setActiveHelp(settingHelp.aiAssistant)} /></span></legend>
         <div className="mt-2 flex items-center gap-1 text-sm text-zinc-300">AI provider<SettingInfoButton settingName={settingHelp.aiProvider.title} onOpen={() => setActiveHelp(settingHelp.aiProvider)} /></div>
-        <div className="mt-2 grid grid-cols-2 gap-2">{providerOptions.map((option) => <div key={option.provider} className={cn('flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm', provider === option.provider ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-zinc-400/30')}>
-          <input id={`provider-${option.provider}`} type="radio" name="llmProvider" checked={provider === option.provider} onChange={() => { setProvider(option.provider); setModels([]); setModel(''); setImageRecognitionModel(''); setStatus(null); setImageRecognitionStatus(null) }} className="accent-yellow-500" />
+        <div data-tour="settings-providers" className="mt-2 grid grid-cols-2 gap-2">{providerOptions.map((option) => <div data-tour={`provider-${option.provider}`} key={option.provider} className={cn('flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm', provider === option.provider ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-zinc-400/30')}>
+          <input id={`provider-${option.provider}`} type="radio" name="llmProvider" checked={provider === option.provider} onChange={() => { setProvider(option.provider); setModels([]); setModel(''); setPluginWizardModel(''); setImageRecognitionModel(''); setStatus(null); setImageRecognitionStatus(null) }} className="accent-yellow-500" />
           <label htmlFor={`provider-${option.provider}`} className="min-w-0 cursor-pointer truncate text-zinc-200">{option.label}</label>
           <SettingInfoButton settingName={option.help.title} onOpen={() => setActiveHelp(option.help)} />
         </div>)}</div>
         {provider === 'local' && <div className="mt-3">
           <div className="flex items-center gap-1 text-sm text-zinc-300"><label htmlFor="lm-studio-url">LM Studio URL</label><SettingInfoButton settingName={settingHelp.localUrl.title} onOpen={() => setActiveHelp(settingHelp.localUrl)} /></div>
-          <input id="lm-studio-url" value={localBaseUrl} onChange={(event) => setLocalBaseUrl(event.target.value)} className="mt-1 w-full rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500" />
+          <input id="lm-studio-url" data-tour="lm-studio-url" value={localBaseUrl} onChange={(event) => setLocalBaseUrl(event.target.value)} className="mt-1 w-full rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500" />
         </div>}
         <div className="mt-3">
           <div className="flex items-center gap-1 text-sm text-zinc-300"><label htmlFor="llm-api-key">{credentialLabel}</label><SettingInfoButton settingName={credentialHelp.title} onOpen={() => setActiveHelp(credentialHelp)} />{keyStatus(provider, settings) && <span className="text-xs text-zinc-500">(configured)</span>}</div>
-          <input id="llm-api-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Replace credential..." autoComplete="off" className="mt-1 w-full rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500" />
+          <input id="llm-api-key" data-tour="llm-credential" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Replace credential..." autoComplete="off" className="mt-1 w-full rounded-md border border-zinc-400/50 bg-transparent px-2 py-1 outline-none caret-yellow-500" />
         </div>
         <div className="mt-3 flex items-center gap-1">
-          <button type="button" onClick={() => void refreshModels()} disabled={isLoadingModels} className="rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50 disabled:cursor-not-allowed disabled:opacity-40">{isLoadingModels ? 'Loading...' : 'Refresh models'}</button>
+          <button data-tour="settings-refresh-models" type="button" onClick={() => void refreshModels()} disabled={isLoadingModels} className="rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50 disabled:cursor-not-allowed disabled:opacity-40">{isLoadingModels ? 'Loading...' : 'Refresh models'}</button>
           <SettingInfoButton settingName={settingHelp.refreshModels.title} onOpen={() => setActiveHelp(settingHelp.refreshModels)} />
         </div>
         <div className="mt-3">
           <div className="flex items-center gap-1 text-sm text-zinc-300"><label htmlFor="active-model">Active model</label><SettingInfoButton settingName={settingHelp.activeModel.title} onOpen={() => setActiveHelp(settingHelp.activeModel)} /></div>
-          <select id="active-model" value={model} onChange={(event) => { setModel(event.target.value); setStatus(null) }} className="mt-1 w-full rounded-md border border-zinc-400/50 bg-zinc-900 px-2 py-1 outline-none">
+          <select id="active-model" data-tour="settings-active-model" value={model} onChange={(event) => { setModel(event.target.value); setStatus(null) }} className="mt-1 w-full rounded-md border border-zinc-400/50 bg-zinc-900 px-2 py-1 outline-none">
             {!model && <option value="">Refresh models first</option>}
             {model && !models.some((item) => item.id === model) && <option value={model}>{model}</option>}
             {models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -367,6 +474,7 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <button
+            data-tour="settings-test-connection"
             type="button"
             onClick={() => void testConnection()}
             disabled={!model || isTesting}
@@ -383,6 +491,23 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
           </button>
           <SettingInfoButton settingName={settingHelp.testConnection.title} onOpen={() => setActiveHelp(settingHelp.testConnection)} />
           {status && <span className={cn('text-xs', status.tone === 'success' ? 'text-green-400' : status.tone === 'error' ? 'text-red-400' : 'text-zinc-400')} aria-live="polite">{status.message}</span>}
+        </div>
+        <div className="mt-4 border-t border-white/10 pt-3">
+          <div className="flex items-center gap-1 text-sm text-zinc-300">
+            <label htmlFor="plugin-wizard-model">AI Plugin Wizard model</label>
+            <SettingInfoButton settingName={settingHelp.pluginWizardModel.title} onOpen={() => setActiveHelp(settingHelp.pluginWizardModel)} />
+          </div>
+          <select
+            id="plugin-wizard-model"
+            value={pluginWizardModel}
+            onChange={(event) => setPluginWizardModel(event.target.value)}
+            className="mt-1 w-full rounded-md border border-zinc-400/50 bg-zinc-900 px-2 py-1 outline-none"
+          >
+            <option value="">{model ? `Active model (${models.find((item) => item.id === model)?.label ?? model})` : 'Active model'}</option>
+            {pluginWizardModel && !models.some((item) => item.id === pluginWizardModel) && <option value={pluginWizardModel}>{pluginWizardModel}</option>}
+            {models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">Uses the current provider and credential. Active model is the default.</p>
         </div>
         <div className="mt-4 border-t border-white/10 pt-3">
           <div className={cn('flex items-center gap-1 text-sm', isImageRecognitionAvailableForDraft ? 'text-zinc-300' : 'text-zinc-500')}>
@@ -409,6 +534,7 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <button
+              data-tour="settings-test-image"
               type="button"
               onClick={() => void testImageRecognition()}
               disabled={!imageRecognitionModel || isTestingImageRecognition || !isImageRecognitionAvailableForDraft}
@@ -443,11 +569,75 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
         </div>
       </fieldset>
       <fieldset className="mt-6 border-t border-white/10 pt-4">
+        <legend className="text-sm font-medium text-zinc-200">Google Calendar</legend>
+        <p className="mt-2 text-xs text-zinc-500">Off by default. Only verified Prognotic items can be sent to Google; imported Google events require validation locally.</p>
+        <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
+          <input type="checkbox" checked={googleEnabled} onChange={(event) => setGoogleEnabled(event.target.checked)} className="accent-yellow-500" />
+          Enable Google Calendar sync
+        </label>
+
+        {settings.googleCalendar.hasOAuthClient && !showGoogleOAuthFields && (
+          <button type="button" onClick={() => setShowGoogleOAuthFields(true)} className="mt-3 text-xs text-zinc-500 underline decoration-zinc-700 underline-offset-2 hover:text-zinc-300">Replace OAuth app configuration</button>
+        )}
+        {showGoogleOAuthFields && (
+          <div className="mt-3 rounded-md border border-white/10 bg-zinc-950/30 p-3">
+            <p className="text-xs text-zinc-400">Configure a Google Cloud Desktop OAuth client. These values are encrypted with Electron safeStorage; packaged environment credentials are also supported.</p>
+            <label htmlFor="google-client-id" className="mt-2 block text-xs text-zinc-500">OAuth client ID</label>
+            <input id="google-client-id" value={googleClientId} onChange={(event) => setGoogleClientId(event.target.value)} autoComplete="off" className="mt-1 w-full rounded-md border border-zinc-600 bg-transparent px-2 py-1 text-sm outline-none caret-yellow-500" />
+            <label htmlFor="google-client-secret" className="mt-2 block text-xs text-zinc-500">OAuth client secret (optional for Desktop clients)</label>
+            <input id="google-client-secret" type="password" value={googleClientSecret} onChange={(event) => setGoogleClientSecret(event.target.value)} autoComplete="off" className="mt-1 w-full rounded-md border border-zinc-600 bg-transparent px-2 py-1 text-sm outline-none caret-yellow-500" />
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {settings.googleCalendar.isConnected ? (
+            <button type="button" disabled={isGoogleWorking} onClick={() => { void handleGoogleDisconnect() }} className="rounded-md border border-red-500/40 px-2 py-1 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50">Disconnect</button>
+          ) : (
+            <button type="button" disabled={isGoogleWorking || (!settings.googleCalendar.hasOAuthClient && !googleClientId.trim())} onClick={() => { void handleGoogleConnect() }} className="rounded-md border border-yellow-500/50 px-2 py-1 text-sm text-yellow-300 hover:bg-yellow-500/10 disabled:opacity-50">Connect Google</button>
+          )}
+          {settings.googleCalendar.connectedEmail && <span className="text-xs text-zinc-400">{settings.googleCalendar.connectedEmail}</span>}
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <label className={cn('flex items-center gap-2 rounded-md border border-white/10 px-2 py-2 text-sm', !googleEnabled && 'text-zinc-600')}>
+            <input type="checkbox" checked={googlePushEnabled} disabled={!googleEnabled} onChange={(event) => setGooglePushEnabled(event.target.checked)} className="accent-yellow-500" />
+            Prognotic → Google
+          </label>
+          <label className={cn('flex items-center gap-2 rounded-md border border-white/10 px-2 py-2 text-sm', !googleEnabled && 'text-zinc-600')}>
+            <input type="checkbox" checked={googlePullEnabled} disabled={!googleEnabled} onChange={(event) => setGooglePullEnabled(event.target.checked)} className="accent-yellow-500" />
+            Google → Prognotic
+          </label>
+        </div>
+
+        <div className="mt-3">
+          <label htmlFor="google-auto-sync" className="text-xs text-zinc-500">Automatic sync interval</label>
+          <select id="google-auto-sync" value={googleAutoSyncMinutes} disabled={!googleEnabled} onChange={(event) => setGoogleAutoSyncMinutes(Number(event.target.value))} className="mt-1 w-full rounded-md border border-zinc-600 bg-zinc-900 px-2 py-1 text-sm disabled:text-zinc-600">
+            <option value={0}>Manual only</option>
+            <option value={15}>Every 15 minutes</option>
+            <option value={30}>Every 30 minutes</option>
+            <option value={60}>Every hour</option>
+          </select>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={isGoogleWorking || !googleEnabled || !settings.googleCalendar.isConnected || (!googlePushEnabled && !googlePullEnabled)} onClick={() => { void handleGoogleSync() }} className="rounded-md border border-zinc-500 px-2 py-1 text-sm hover:bg-zinc-700 disabled:opacity-40">{isGoogleWorking ? 'Working…' : 'Sync now'}</button>
+          {settings.googleCalendar.lastSyncAt && <span className="text-xs text-zinc-500">Last sync {new Intl.DateTimeFormat(window.context.locale, { dateStyle: 'short', timeStyle: 'short' }).format(settings.googleCalendar.lastSyncAt)}</span>}
+        </div>
+        {(googleStatus || settings.googleCalendar.lastSyncMessage) && (
+          <p className={cn('mt-2 text-xs', googleStatus?.tone === 'error' || (!googleStatus && settings.googleCalendar.lastSyncStatus === 'error') ? 'text-red-400' : googleStatus?.tone === 'success' ? 'text-green-400' : 'text-zinc-400')} role="status">
+            {googleStatus?.message ?? settings.googleCalendar.lastSyncMessage}
+          </p>
+        )}
+      </fieldset>
+      <fieldset className="mt-6 border-t border-white/10 pt-4">
         <legend className="text-sm font-medium text-zinc-200">Plugins</legend>
         <p className="mt-2 text-xs text-zinc-500">Browse folders installed in your local vault, enable them, and edit their configuration.</p>
-        <button type="button" onClick={() => setIsPluginManagerOpen(true)} className="mt-2 rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50">Manage plugins</button>
+        <button data-tour="settings-plugins" type="button" onClick={() => setIsPluginManagerOpen(true)} className="mt-2 rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50">Manage plugins</button>
       </fieldset>
-      <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50">Cancel</button><button type="button" onClick={() => void handleSave()} className="rounded-md border border-yellow-500/50 px-2 py-1 text-sm hover:bg-yellow-500/20">Save</button></div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50">Cancel</button>
+        <button data-tour="settings-save" type="button" onClick={() => void handleSave()} className="rounded-md border border-yellow-500/50 px-2 py-1 text-sm hover:bg-yellow-500/20">Save</button>
+      </div>
     </div>
     {activeHelp && <SettingInfoModal title={activeHelp.title} body={activeHelp.body} onClose={() => setActiveHelp(null)} />}
     {isPluginManagerOpen && <PluginManagerModal onClose={() => setIsPluginManagerOpen(false)} />}

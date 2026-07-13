@@ -1,9 +1,9 @@
 import { AssistantMode, BlockMeta, LlmProvider } from '@shared/models'
-import { AssistantModelSelection, AssistantScope, ImageRecognitionInput, LlmMessage, LlmModel } from '@shared/types'
+import { AssistantModelSelection, AssistantScope, ImageRecognitionInput, LlmMessage, LlmModel, SummarizeDocumentInput } from '@shared/types'
 import { PluginAiCompleteInput, PluginAiCompleteResult, PluginAiPromptLayers } from '@shared/plugins'
 import { researchCategory } from '@shared/constants'
 import { getBlocks, getCredential, getGoals, getSettings, readBlock, setBlockAiLabel, setBlockRouting } from '@/lib'
-import { isImageRecognitionSelectionVerified, isLlmSelectionVerified } from '@shared/llmSettings'
+import { isImageRecognitionSelectionVerified, isLlmSelectionVerified, resolvePluginWizardModel } from '@shared/llmSettings'
 import { hasSupportedImageSignature, maxImageRecognitionBytes, supportedImageMimeTypes, SupportedImageMimeType } from '@shared/vision'
 import { blockNameSystemPrompt, normalizeBlockNameSummary } from './blockName'
 import { parseRoutingClassification } from './classification'
@@ -14,6 +14,9 @@ import { researchWeb } from './webResearch'
 import { buildPluginAiMessages } from './pluginPrompt'
 import { buildAssistantSystemPrompt } from './assistantPrompt'
 import { buildImageRecognitionPrompt } from './imageRecognition'
+import { maxDocumentSummaryOutputChars, truncateDocumentText } from '@shared/documents'
+import { buildDocumentSummaryRequest } from './documentSummary'
+import { temporalExtractionSystemPrompt } from '../calendar/prompt'
 
 export { buildAssistantSystemPrompt } from './assistantPrompt'
 
@@ -267,6 +270,35 @@ const collectWith = async (
     let text = ''
     await (await adapterFor(selection.provider)).stream(selection.model, messages, { signal, onToken: (token) => { text += token }, maxTokens })
     return text.trim()
+}
+
+export const llmNotReadyMessage = 'AI is not ready. Choose a model and test the connection in Settings.'
+
+export const completePluginWizardLlm = async (
+    messages: LlmMessage[],
+    maxTokens: number,
+    timeoutMs = 90_000
+): Promise<string> => {
+    const settings = await getSettings()
+    if (!isLlmSelectionVerified(settings.llm)) throw new Error(llmNotReadyMessage)
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), Math.max(5_000, Math.min(120_000, timeoutMs)))
+    try {
+        const text = await collectWith(
+            { provider: settings.llm.provider, model: resolvePluginWizardModel(settings.llm) },
+            messages,
+            controller.signal,
+            Math.max(64, Math.min(8_192, Math.round(maxTokens)))
+        )
+        if (!text) throw new Error('AI returned an empty response. Try again.')
+        return text
+    } catch (error) {
+        if (controller.signal.aborted) throw new Error('AI took too long to respond. Try again.')
+        throw error
+    } finally {
+        clearTimeout(timeout)
+    }
 }
 
 type ResolvedGoalScope = { goalIds?: string[]; readGoalLabels: string[] }
@@ -536,7 +568,7 @@ export const completePluginAi = async (
 ): Promise<PluginAiCompleteResult> => {
     const settings = await getSettings()
     if (!isLlmSelectionVerified(settings.llm)) {
-        return { error: 'AI is not ready. Choose a model and test the connection in Settings.' }
+        return { error: llmNotReadyMessage }
     }
 
     const prompt = input.prompt.trim().slice(0, 12_000)
@@ -572,6 +604,70 @@ export const polishTranscript = async (text: string): Promise<string> => collect
     { role: 'system', content: 'Clean up grammar and filler words in this dictation transcript. Preserve meaning, facts, and markdown. Return only the polished transcript.' },
     { role: 'user', content: text }
 ])
+
+export const completeTemporalExtraction = async (
+    note: string,
+    currentTime: string,
+    timeZone: string
+): Promise<string | null> => {
+    const settings = await getSettings()
+    if (!isLlmSelectionVerified(settings.llm)) return null
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30_000)
+    try {
+        return await collectWith(
+            { provider: settings.llm.provider, model: settings.llm.model },
+            [
+                { role: 'system', content: temporalExtractionSystemPrompt },
+                {
+                    role: 'user',
+                    content: JSON.stringify({
+                        currentTime,
+                        timeZone,
+                        note: note.slice(0, 12_000)
+                    })
+                }
+            ],
+            controller.signal,
+            2_048
+        )
+    } catch (error) {
+        if (controller.signal.aborted) throw new Error('Calendar extraction timed out.')
+        throw error
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
+export const summarizeDocument = async (input: SummarizeDocumentInput): Promise<{ text: string; inputTruncated: boolean }> => {
+    const settings = await getSettings()
+    if (!isLlmSelectionVerified(settings.llm)) throw new Error(llmNotReadyMessage)
+    const request = buildDocumentSummaryRequest(input)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60_000)
+
+    try {
+        const text = await collectWith(
+            { provider: settings.llm.provider, model: settings.llm.model },
+            request.messages,
+            controller.signal,
+            request.maxTokens
+        )
+        if (!text) throw new Error('AI returned an empty summary. Try again or insert the raw text.')
+        const bounded = truncateDocumentText(
+            text,
+            maxDocumentSummaryOutputChars,
+            '> AI summary was truncated to stay within capture limits.'
+        )
+        return { text: bounded.text, inputTruncated: request.inputTruncated }
+    } catch (error) {
+        if (controller.signal.aborted) throw new Error('Document summarization took too long. Try again or insert the raw text.')
+        throw error
+    } finally {
+        clearTimeout(timeout)
+    }
+}
 
 export const summarizeBlockName = async (blockId: string): Promise<BlockMeta | null> => {
     const [content, settings] = await Promise.all([readBlock(blockId), getSettings()])

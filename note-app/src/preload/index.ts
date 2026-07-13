@@ -1,4 +1,4 @@
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetPlugins, GetSettings, OnAssistantStreamEvent, OpenPluginsFolder, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, TranscribeAudio, UpdateBlockCategories, WriteBlock, WriteClipboardText } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OnAssistantStreamEvent, OpenPluginsFolder, ParseDocument, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 
 
@@ -48,6 +48,17 @@ try {
     },
     setCredential: (...args: Parameters<SetCredential>) => ipcRenderer.invoke('setCredential', ...args),
     clearCredential: (...args: Parameters<ClearCredential>) => ipcRenderer.invoke('clearCredential', ...args),
+    getCalendarItems: (...args: Parameters<GetCalendarItems>) => ipcRenderer.invoke('getCalendarItems', ...args),
+    backfillCalendar: (...args: Parameters<BackfillCalendar>) => ipcRenderer.invoke('backfillCalendar', ...args),
+    extractCalendarForBlock: (...args: Parameters<ExtractCalendarForBlock>) => ipcRenderer.invoke('extractCalendarForBlock', ...args),
+    validateCalendarItem: (...args: Parameters<ValidateCalendarItem>) => ipcRenderer.invoke('validateCalendarItem', ...args),
+    resolveCalendarItem: (...args: Parameters<ResolveCalendarItem>) => ipcRenderer.invoke('resolveCalendarItem', ...args),
+    updateCalendarItem: (...args: Parameters<UpdateCalendarItem>) => ipcRenderer.invoke('updateCalendarItem', ...args),
+    deleteCalendarItem: (...args: Parameters<DeleteCalendarItem>) => ipcRenderer.invoke('deleteCalendarItem', ...args),
+    configureGoogleCalendar: (...args: Parameters<ConfigureGoogleCalendar>) => ipcRenderer.invoke('configureGoogleCalendar', ...args),
+    connectGoogleCalendar: (...args: Parameters<ConnectGoogleCalendar>) => ipcRenderer.invoke('connectGoogleCalendar', ...args),
+    disconnectGoogleCalendar: (...args: Parameters<DisconnectGoogleCalendar>) => ipcRenderer.invoke('disconnectGoogleCalendar', ...args),
+    syncGoogleCalendar: (...args: Parameters<SyncGoogleCalendar>) => ipcRenderer.invoke('syncGoogleCalendar', ...args),
     getGoals: (...args: Parameters<GetGoals>) => {
       return ipcRenderer.invoke('getGoals', ...args)
     },
@@ -70,6 +81,8 @@ try {
     testLlmConnection: (...args: Parameters<TestLlmConnection>) => ipcRenderer.invoke('testLlmConnection', ...args),
     testImageRecognitionConnection: (...args: Parameters<TestImageRecognitionConnection>) => ipcRenderer.invoke('testImageRecognitionConnection', ...args),
     recognizeImage: (...args: Parameters<RecognizeImage>) => ipcRenderer.invoke('recognizeImage', ...args),
+    parseDocument: (...args: Parameters<ParseDocument>) => ipcRenderer.invoke('parseDocument', ...args),
+    summarizeDocument: (...args: Parameters<SummarizeDocument>) => ipcRenderer.invoke('summarizeDocument', ...args),
     startAssistantStream: (...args: Parameters<StartAssistantStream>) => ipcRenderer.invoke('startAssistantStream', ...args),
     cancelAssistantStream: (...args: Parameters<CancelAssistantStream>) => ipcRenderer.invoke('cancelAssistantStream', ...args),
     onAssistantStreamEvent: (callback: Parameters<OnAssistantStreamEvent>[0]) => {
@@ -90,6 +103,8 @@ try {
     openPluginsFolder: (...args: Parameters<OpenPluginsFolder>) => ipcRenderer.invoke('openPluginsFolder', ...args),
     runPluginCommand: (...args: Parameters<RunPluginCommand>) => ipcRenderer.invoke('runPluginCommand', ...args),
     callPluginHost: (...args: Parameters<CallPluginHost>) => ipcRenderer.invoke('callPluginHost', ...args),
+    interviewPluginWizard: (...args: Parameters<InterviewPluginWizard>) => ipcRenderer.invoke('interviewPluginWizard', ...args),
+    createGeneratedPlugin: (...args: Parameters<CreateGeneratedPlugin>) => ipcRenderer.invoke('createGeneratedPlugin', ...args),
   })
 } catch (error) {
   console.error('Failed to expose context bridge:', error)

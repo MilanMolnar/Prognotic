@@ -1,6 +1,6 @@
 import dietaryEntryAsset from '../../../resources/plugins/dietary/index.cjs?asset'
 import dietaryManifestTemplate from '../../../resources/plugins/dietary/plugin.json'
-import { pluginStateFileName, pluginsDirectoryName } from '@shared/constants'
+import { pluginsDirectoryName } from '@shared/constants'
 import { countUnvisitedBlocksForGoal } from '@shared/goalPresence'
 import type {
     InstalledPlugin,
@@ -30,8 +30,7 @@ import {
     readBlock,
     setPluginBlockPresence,
     updateBlockCategories,
-    writeBlock,
-    writeJsonAtomic
+    writeBlock
 } from '@/lib'
 import { completePluginAi } from '../llm/router'
 import {
@@ -47,13 +46,7 @@ import {
     validatePluginManifest
 } from './manifest'
 import { getPluginStorageValue, setPluginStorageValue } from './storage'
-
-type PluginStateFile = {
-    version: 1
-    enabledPluginIds: string[]
-    config: Record<string, PluginConfig>
-    seededPluginIds: string[]
-}
+import { PluginStateFile, readPluginState, updatePluginState } from './state'
 
 type DiscoveredPlugin = {
     folderName: string
@@ -99,52 +92,7 @@ type PluginExecutionContext = {
 
 const pluginExecutionContext = new AsyncLocalStorage<PluginExecutionContext>()
 
-const emptyPluginState = (): PluginStateFile => ({
-    version: 1,
-    enabledPluginIds: [],
-    config: {},
-    seededPluginIds: []
-})
-
 const pluginDirectory = (): string => join(getRootDir(), pluginsDirectoryName)
-const pluginStatePath = (): string => join(getRootDir(), pluginStateFileName)
-
-let stateLock: Promise<unknown> = Promise.resolve()
-const withPluginStateLock = <T>(task: () => Promise<T>): Promise<T> => {
-    const run = stateLock.then(task, task)
-    stateLock = run.catch(() => undefined)
-    return run
-}
-
-const readPluginState = async (): Promise<PluginStateFile> => {
-    try {
-        const parsed = JSON.parse(await readFile(pluginStatePath(), 'utf8')) as Partial<PluginStateFile>
-        return {
-            version: 1,
-            enabledPluginIds: Array.isArray(parsed.enabledPluginIds)
-                ? [...new Set(parsed.enabledPluginIds.filter((id): id is string => typeof id === 'string'))]
-                : [],
-            config: parsed.config && typeof parsed.config === 'object' && !Array.isArray(parsed.config)
-                ? parsed.config
-                : {},
-            seededPluginIds: Array.isArray(parsed.seededPluginIds)
-                ? [...new Set(parsed.seededPluginIds.filter((id): id is string => typeof id === 'string'))]
-                : []
-        }
-    } catch {
-        return emptyPluginState()
-    }
-}
-
-const updatePluginState = async (
-    update: (state: PluginStateFile) => PluginStateFile | Promise<PluginStateFile>
-): Promise<PluginStateFile> => withPluginStateLock(async () => {
-    const state = await readPluginState()
-    const next = await update(state)
-    await ensureDir(getRootDir())
-    await writeJsonAtomic(pluginStatePath(), next)
-    return next
-})
 
 let setupPromise: Promise<void> | null = null
 const ensurePluginEnvironment = (): Promise<void> => {
@@ -474,7 +422,8 @@ const buildCatalog = async (
                 id ? state.config[id] : undefined
             ),
             ...(plugin.manifest?.ui ? { ui: plugin.manifest.ui } : {}),
-            badgeCount: categoryId ? countUnvisitedBlocksForGoal(blocks, categoryId) : 0
+            badgeCount: categoryId ? countUnvisitedBlocksForGoal(blocks, categoryId) : 0,
+            aiGenerated: id !== null && state.aiGeneratedPlugins[id]?.folderName === plugin.folderName
         }
     })
     return { pluginsPath: pluginDirectory(), plugins }
@@ -594,7 +543,12 @@ export const removePlugin = async (folderName: string): Promise<PluginMutationRe
             return {
                 ...state,
                 enabledPluginIds: state.enabledPluginIds.filter((id) => id !== activeId),
-                config: nextConfig
+                config: nextConfig,
+                aiGeneratedPlugins: Object.fromEntries(
+                    Object.entries(state.aiGeneratedPlugins).filter(([id, origin]) =>
+                        id !== activeId || origin.folderName !== folderName
+                    )
+                )
             }
         })
     }

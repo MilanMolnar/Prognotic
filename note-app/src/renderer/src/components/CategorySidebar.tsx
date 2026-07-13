@@ -4,6 +4,8 @@ import {
   useBlockActions,
   useBlockDrag,
   useBlocks,
+  useCalendar,
+  useCalendarActions,
   useGoalActions,
   useGoals,
   usePanelActions,
@@ -16,6 +18,7 @@ import {
 import { cn } from '@renderer/utils'
 import { maxPinnedGoals, researchCategory } from '@shared/constants'
 import { countUnvisitedBlocksForGoal } from '@shared/goalPresence'
+import { countPendingCalendarItems, hasUncertainCalendarItems } from '@shared/calendar'
 import { Goal } from '@shared/models'
 import type { InstalledPlugin } from '@shared/plugins'
 import {
@@ -30,11 +33,12 @@ import {
   useRef,
   useState
 } from 'react'
-import { LuBookOpen, LuHeartPulse, LuLeaf, LuPanelLeftClose, LuPin, LuPuzzle, LuSearch, LuSparkles, LuStickyNote, LuUtensils } from 'react-icons/lu'
+import { LuBookOpen, LuCalendarDays, LuHeartPulse, LuLeaf, LuPanelLeftClose, LuPin, LuPuzzle, LuSearch, LuSparkles, LuStickyNote, LuUtensils } from 'react-icons/lu'
 
 const categoryId = (key: CategoryKey): string => key ?? 'quick-notes'
 const pluginRowId = (pluginId: string): string => `plugin-row:${pluginId}`
 const goalSearchId = '__goal-search__'
+const calendarRowId = '__calendar__'
 
 const goalRowClass =
   'flex h-9 items-center rounded-md border border-transparent px-2.5 text-sm transition-colors duration-75'
@@ -46,7 +50,9 @@ type SelectableItemProps = {
   // Stable DOM hook (data-category-row) so transient effects outside this
   // component — e.g. the "send to research" flight — can find the row.
   categoryRowId: string
+  tourId?: string
   leading?: ReactNode
+  labelBadge?: ReactNode
   trailing?: ReactNode
   onContextMenu?: (event: MouseEvent) => void
   blockDropState?: 'available' | 'active'
@@ -57,7 +63,9 @@ const SelectableItem = ({
   onClick,
   itemRef,
   categoryRowId,
+  tourId,
   leading,
+  labelBadge,
   trailing,
   onContextMenu,
   blockDropState
@@ -65,6 +73,7 @@ const SelectableItem = ({
   <li
     ref={itemRef}
     data-category-row={categoryRowId}
+    data-tour={tourId}
     onClick={onClick}
     onContextMenu={onContextMenu}
     className={cn(
@@ -75,7 +84,10 @@ const SelectableItem = ({
     )}
   >
     {leading}
-    <span className="min-w-0 flex-1 truncate">{label}</span>
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      <span className="truncate">{label}</span>
+      {labelBadge}
+    </span>
     {trailing}
   </li>
 )
@@ -86,16 +98,18 @@ type SystemButtonProps = {
   itemRef: (element: HTMLElement | null) => void
   categoryRowId: string
   leading: ReactNode
+  trailing?: ReactNode
   blockDropState?: 'available' | 'active'
 }
 
-const SystemItem = ({ label, onClick, itemRef, categoryRowId, leading, blockDropState }: SystemButtonProps): JSX.Element => (
+const SystemItem = ({ label, onClick, itemRef, categoryRowId, leading, trailing, blockDropState }: SystemButtonProps): JSX.Element => (
   <SelectableItem
     label={label}
     onClick={onClick}
     itemRef={itemRef}
     categoryRowId={categoryRowId}
     leading={leading}
+    trailing={trailing}
     blockDropState={blockDropState}
   />
 )
@@ -120,10 +134,10 @@ const PluginIcon = ({ name }: { name?: string }): JSX.Element => {
 }
 
 export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>): JSX.Element => {
-  const { goals, selectedCategory, selectedPluginId } = useGoals()
+  const { goals, selectedCategory, selectedPluginId, isCalendarSelected } = useGoals()
   const { plugins } = usePlugins()
   const { blocks } = useBlocks()
-  const { selectCategory, selectPlugin, deleteGoal } = useGoalActions()
+  const { selectCategory, selectPlugin, selectCalendar, deleteGoal } = useGoalActions()
   const { selectBlock } = useBlockActions()
   const { closeSearch } = useSearchActions()
   const { toggleLeftPanel } = usePanelActions()
@@ -131,6 +145,8 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const { settings } = useSettings()
   const { togglePinGoal } = useSettingsActions()
   const { activeDrag } = useBlockDrag()
+  const { items: calendarItems } = useCalendar()
+  const { openResolutionQueue } = useCalendarActions()
   const [search, setSearch] = useState('')
   const [isGoalSearchOpen, setIsGoalSearchOpen] = useState(false)
   const [contextGoal, setContextGoal] = useState<{ goal: Goal; position: { x: number; y: number } } | null>(null)
@@ -164,10 +180,17 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     []
   )
 
+  const registerCalendarRef = useCallback((element: HTMLElement | null) => {
+    if (element) itemRefs.current.set(calendarRowId, element)
+    else itemRefs.current.delete(calendarRowId)
+  }, [])
+
   const updateIndicator = useCallback((): void => {
     const container = listContainerRef.current
     const activeId = isGoalSearchOpen
       ? goalSearchId
+      : isCalendarSelected
+        ? calendarRowId
       : selectedPluginId
         ? pluginRowId(selectedPluginId)
         : categoryId(selectedCategory)
@@ -187,7 +210,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
       height: itemRect.height,
       visible: true
     })
-  }, [isGoalSearchOpen, selectedCategory, selectedPluginId])
+  }, [isGoalSearchOpen, isCalendarSelected, selectedCategory, selectedPluginId])
 
   const pinnedIds = settings.pinnedGoalIds
   const canPinMore = pinnedIds.length < maxPinnedGoals
@@ -218,6 +241,8 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const unvisitedCounts = useMemo(() => new Map(
     (goals ?? []).map((goal) => [goal.id, countUnvisitedBlocksForGoal(blocks, goal.id)])
   ), [blocks, goals])
+  const pendingCalendarCount = countPendingCalendarItems(calendarItems)
+  const hasUncertainCalendar = hasUncertainCalendarItems(calendarItems)
 
   const counterFor = (goalId: string): ReactNode => {
     const count = unvisitedCounts.get(goalId) ?? 0
@@ -299,6 +324,13 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
 
   const handlePluginSelect = (pluginId: string) => (): void => {
     selectPlugin(pluginId)
+    selectBlock(null)
+    closeSearch()
+    closeGoalSearch()
+  }
+
+  const handleCalendarSelect = (): void => {
+    selectCalendar()
     selectBlock(null)
     closeSearch()
     closeGoalSearch()
@@ -403,6 +435,40 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             onClick={handleCategorySelect(researchCategory)}
             leading={<LuBookOpen className={systemGoalIconClass} aria-hidden />}
           />
+          <SystemItem
+            label="Calendar"
+            itemRef={registerCalendarRef}
+            categoryRowId={calendarRowId}
+            onClick={handleCalendarSelect}
+            leading={<LuCalendarDays className={systemGoalIconClass} aria-hidden />}
+            trailing={(pendingCalendarCount > 0 || hasUncertainCalendar) ? (
+              <span className="flex shrink-0 items-center gap-1">
+                {pendingCalendarCount > 0 && (
+                  <span
+                    title={`${pendingCalendarCount} ${pendingCalendarCount === 1 ? 'item needs' : 'items need'} validation`}
+                    className="min-w-5 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-1.5 py-0.5 text-center text-[10px] font-medium leading-none text-emerald-400"
+                  >
+                    {pendingCalendarCount}
+                  </span>
+                )}
+                {hasUncertainCalendar && (
+                  <button
+                    type="button"
+                    title="Resolve uncertain calendar items"
+                    aria-label="Resolve uncertain calendar items"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleCalendarSelect()
+                      openResolutionQueue()
+                    }}
+                    className="flex h-5 w-5 items-center justify-center rounded-full border border-yellow-500/50 bg-yellow-500/10 text-[11px] font-bold leading-none text-yellow-400 hover:bg-yellow-500/20"
+                  >
+                    !
+                  </button>
+                )}
+              </span>
+            ) : undefined}
+          />
         </ul>
 
         {enabledPlugins.length > 0 && (
@@ -417,6 +483,11 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                   categoryRowId={pluginRowId(plugin.id)}
                   onClick={handlePluginSelect(plugin.id)}
                   leading={<PluginIcon name={plugin.sidebar?.icon} />}
+                  labelBadge={plugin.aiGenerated ? (
+                    <span title="Created with AI" aria-label="Created with AI" className="shrink-0 text-violet-300">
+                      <LuSparkles className="h-3 w-3" aria-hidden />
+                    </span>
+                  ) : undefined}
                   trailing={pluginCounter(plugin.badgeCount)}
                 />
               ))}
@@ -434,6 +505,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                   label={goal.name}
                   itemRef={registerItemRef(goal.id)}
                   categoryRowId={categoryId(goal.id)}
+                  tourId={goal.name.trim().toLowerCase() === 'work' ? 'work-goal' : undefined}
                   blockDropState={blockDropStateFor(categoryId(goal.id))}
                   onClick={handleCategorySelect(goal.id)}
                   onContextMenu={handleGoalContextMenu(goal)}
@@ -462,6 +534,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               label={goal.name}
               itemRef={registerItemRef(goal.id)}
               categoryRowId={categoryId(goal.id)}
+              tourId={goal.name.trim().toLowerCase() === 'work' ? 'work-goal' : undefined}
               blockDropState={blockDropStateFor(categoryId(goal.id))}
               onClick={handleCategorySelect(goal.id)}
               onContextMenu={handleGoalContextMenu(goal)}

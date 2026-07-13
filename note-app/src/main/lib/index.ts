@@ -8,6 +8,7 @@ import { ensureDir, readdir, readFile, remove, rename, stat, writeFile } from "f
 import { homedir } from "os"
 import welcomeNoteFile from '../../../resources/welcome-note.md?asset'
 import { normalizeCategories, normalizeDictationModeForPlatform, normalizeVerifiedLlmConnection, planLegacyWisprMigration, recordRoutingDecision, updateRoutingDecision } from './persistenceHelpers'
+import { removeCalendarItemsForBlock } from '../calendar/store'
 
 
 export const separator = (): string => {
@@ -112,6 +113,7 @@ export const getBlocks: GetBlocks = async () => {
         for (const [id, meta] of Object.entries(index.blocks)) {
             if (!mdFiles.has(meta.file)) {
                 delete index.blocks[id]
+                await removeCalendarItemsForBlock(id)
                 changed = true
             }
         }
@@ -176,6 +178,16 @@ export const readBlock: ReadBlock = async (id) => {
     const content = await readFile(getBlockPath(meta.file), { encoding: fileEncoding })
     return { content }
 }
+
+export const readBlockSnapshot = async (
+    id: string
+): Promise<{ meta: BlockMeta; content: string } | null> => withIndexLock(async () => {
+    const { index } = await loadIndex()
+    const meta = index.blocks[id]
+    if (!meta) return null
+    const content = await readFile(getBlockPath(meta.file), { encoding: fileEncoding })
+    return { meta: { ...meta }, content }
+})
 
 export const writeBlock: WriteBlock = async (id, content) => {
     return withIndexLock(async () => {
@@ -397,6 +409,7 @@ export const deleteBlockPermanently = async (id: string): Promise<boolean> => {
 
         await remove(getBlockPath(meta.file))
         delete index.blocks[id]
+        await removeCalendarItemsForBlock(id)
         await writeJsonAtomic(getIndexPath(), index)
         return true
     })
@@ -451,6 +464,7 @@ export const deleteBlockIfEmpty: DeleteBlockIfEmpty = async (id) => {
         console.info(`Deleting empty block ${id}`)
         await remove(blockPath)
         delete index.blocks[id]
+        await removeCalendarItemsForBlock(id)
         await writeJsonAtomic(getIndexPath(), index)
 
         return true
@@ -551,11 +565,20 @@ const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
         : defaultSettings.pinnedGoalIds,
     captureMode: settings.captureMode === 'natural' ? 'natural' : 'chat',
     dictationMode: normalizeDictationModeForPlatform(settings.dictationMode, process.platform),
+    onboardingCompleted: settings.onboardingCompleted === true,
+    onboardingSkipped: settings.onboardingSkipped === true,
+    onboardingCompletedAt: typeof settings.onboardingCompletedAt === 'number' &&
+        Number.isFinite(settings.onboardingCompletedAt)
+        ? settings.onboardingCompletedAt
+        : undefined,
     llm: {
         provider: settings.llm?.provider === 'openai' || settings.llm?.provider === 'anthropic' || settings.llm?.provider === 'local'
             ? settings.llm.provider
             : 'gemini',
         model: typeof settings.llm?.model === 'string' ? settings.llm.model.trim() : '',
+        pluginWizardModel: typeof settings.llm?.pluginWizardModel === 'string'
+            ? settings.llm.pluginWizardModel.trim()
+            : '',
         imageRecognitionModel: typeof settings.llm?.imageRecognitionModel === 'string'
             ? settings.llm.imageRecognitionModel.trim()
             : '',
@@ -569,6 +592,34 @@ const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
             settings.llm?.verifiedImageRecognitionConnection
         ),
     },
+    googleCalendar: {
+        enabled: settings.googleCalendar?.enabled === true,
+        pushEnabled: settings.googleCalendar?.pushEnabled === true,
+        pullEnabled: settings.googleCalendar?.pullEnabled === true,
+        autoSyncMinutes: typeof settings.googleCalendar?.autoSyncMinutes === 'number' &&
+            Number.isFinite(settings.googleCalendar.autoSyncMinutes)
+            ? Math.max(0, Math.min(1440, Math.round(settings.googleCalendar.autoSyncMinutes)))
+            : 0,
+        connectedEmail: typeof settings.googleCalendar?.connectedEmail === 'string' &&
+            settings.googleCalendar.connectedEmail.trim()
+            ? settings.googleCalendar.connectedEmail.trim().slice(0, 320)
+            : undefined,
+        // These flags are derived from encrypted storage by publicSettings.
+        hasOAuthClient: false,
+        isConnected: false,
+        lastSyncAt: typeof settings.googleCalendar?.lastSyncAt === 'number' &&
+            Number.isFinite(settings.googleCalendar.lastSyncAt)
+            ? settings.googleCalendar.lastSyncAt
+            : undefined,
+        lastSyncStatus: settings.googleCalendar?.lastSyncStatus === 'success' ||
+            settings.googleCalendar?.lastSyncStatus === 'error'
+            ? settings.googleCalendar.lastSyncStatus
+            : 'idle',
+        lastSyncMessage: typeof settings.googleCalendar?.lastSyncMessage === 'string' &&
+            settings.googleCalendar.lastSyncMessage.trim()
+            ? settings.googleCalendar.lastSyncMessage.trim().slice(0, 500)
+            : undefined,
+    },
     hasWhisprflowApiKey: false,
     hasGeminiApiKey: false,
     hasOpenaiApiKey: false,
@@ -576,7 +627,9 @@ const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
     hasLocalApiToken: false,
 })
 
-type SecretFile = { version: 1; values: Partial<Record<LlmCredentialName, string>> }
+type GoogleSecretName = 'googleOAuthClientId' | 'googleOAuthClientSecret' | 'googleRefreshToken'
+type SecretName = LlmCredentialName | GoogleSecretName
+type SecretFile = { version: 1; values: Partial<Record<SecretName, string>> }
 
 const loadSecretFile = async (): Promise<SecretFile> => {
     try {
@@ -597,7 +650,7 @@ const ensureEncryptedStorage = (): void => {
     }
 }
 
-export const getCredential = async (name: LlmCredentialName): Promise<string> => {
+const getSecret = async (name: SecretName): Promise<string> => {
     const stored = (await loadSecretFile()).values[name]
     if (!stored) return ''
     try {
@@ -607,6 +660,8 @@ export const getCredential = async (name: LlmCredentialName): Promise<string> =>
         return ''
     }
 }
+
+export const getCredential = async (name: LlmCredentialName): Promise<string> => getSecret(name)
 
 type CredentialFlag = keyof Pick<AppSettings, 'hasWhisprflowApiKey' | 'hasGeminiApiKey' | 'hasOpenaiApiKey' | 'hasAnthropicApiKey' | 'hasLocalApiToken'>
 
@@ -620,7 +675,7 @@ const credentialFlags: Record<LlmCredentialName, CredentialFlag> = {
 
 const credentialFlag = (name: LlmCredentialName): CredentialFlag => credentialFlags[name]
 
-const storeCredential = async (name: LlmCredentialName, value: string): Promise<void> => {
+const storeSecret = async (name: SecretName, value: string): Promise<void> => {
     await ensureDir(getRootDir())
     ensureEncryptedStorage()
     const secrets = await loadSecretFile()
@@ -629,6 +684,28 @@ const storeCredential = async (name: LlmCredentialName, value: string): Promise<
     else delete secrets.values[name]
     await writeJsonAtomic(getSecretsPath(), secrets)
 }
+
+const storeCredential = async (name: LlmCredentialName, value: string): Promise<void> =>
+    storeSecret(name, value)
+
+export const getGoogleOAuthClientCredentials = async (): Promise<{ clientId: string; clientSecret: string }> => ({
+    clientId: process.env['GOOGLE_OAUTH_CLIENT_ID']?.trim() || await getSecret('googleOAuthClientId'),
+    clientSecret: process.env['GOOGLE_OAUTH_CLIENT_SECRET']?.trim() || await getSecret('googleOAuthClientSecret')
+})
+
+export const setGoogleOAuthClientCredentials = async (
+    clientId: string,
+    clientSecret: string
+): Promise<AppSettings> => {
+    await storeSecret('googleOAuthClientId', clientId)
+    await storeSecret('googleOAuthClientSecret', clientSecret)
+    return getSettings()
+}
+
+export const getGoogleRefreshToken = async (): Promise<string> => getSecret('googleRefreshToken')
+
+export const setGoogleRefreshToken = async (value: string): Promise<void> =>
+    storeSecret('googleRefreshToken', value)
 
 export const setCredential = async (name: LlmCredentialName, value: string): Promise<AppSettings> => {
     await storeCredential(name, value)
@@ -639,6 +716,13 @@ const publicSettings = async (settings: AppSettings): Promise<AppSettings> => {
     const next = { ...settings }
     for (const name of ['whisprflow', 'gemini', 'openai', 'anthropic', 'local'] as const) {
         next[credentialFlag(name)] = (await getCredential(name)).length > 0
+    }
+    const oauthClient = await getGoogleOAuthClientCredentials()
+    const refreshToken = await getGoogleRefreshToken()
+    next.googleCalendar = {
+        ...settings.googleCalendar,
+        hasOAuthClient: oauthClient.clientId.length > 0,
+        isConnected: refreshToken.length > 0,
     }
     return next
 }
@@ -675,7 +759,12 @@ export const setSettings: SetSettings = async (patch) => {
     await ensureDir(rootDir)
 
     const current = await getSettings()
-    const merged = clampSettings({ ...current, ...patch, llm: { ...current.llm, ...patch.llm } })
+    const merged = clampSettings({
+        ...current,
+        ...patch,
+        llm: { ...current.llm, ...patch.llm },
+        googleCalendar: { ...current.googleCalendar, ...patch.googleCalendar }
+    })
     await writeJsonAtomic(getSettingsPath(), merged)
     return publicSettings(merged)
 }

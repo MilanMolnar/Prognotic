@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetPlugins, GetSettings, OnAssistantStreamEvent, OpenPluginsFolder, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, WriteBlock, WriteClipboardText } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OnAssistantStreamEvent, OpenPluginsFolder, ParseDocument, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
 
 declare global {
   interface Window {
@@ -22,6 +22,17 @@ declare global {
       setSettings: SetSettings
       setCredential: SetCredential
       clearCredential: ClearCredential
+      getCalendarItems: GetCalendarItems
+      backfillCalendar: BackfillCalendar
+      extractCalendarForBlock: ExtractCalendarForBlock
+      validateCalendarItem: ValidateCalendarItem
+      resolveCalendarItem: ResolveCalendarItem
+      updateCalendarItem: UpdateCalendarItem
+      deleteCalendarItem: DeleteCalendarItem
+      configureGoogleCalendar: ConfigureGoogleCalendar
+      connectGoogleCalendar: ConnectGoogleCalendar
+      disconnectGoogleCalendar: DisconnectGoogleCalendar
+      syncGoogleCalendar: SyncGoogleCalendar
       getGoals: GetGoals
       createGoal: CreateGoal
       renameGoal: RenameGoal
@@ -34,6 +45,8 @@ declare global {
       testLlmConnection: TestLlmConnection
       testImageRecognitionConnection: TestImageRecognitionConnection
       recognizeImage: RecognizeImage
+      parseDocument: ParseDocument
+      summarizeDocument: SummarizeDocument
       startAssistantStream: StartAssistantStream
       cancelAssistantStream: CancelAssistantStream
       onAssistantStreamEvent: OnAssistantStreamEvent
@@ -50,6 +63,8 @@ declare global {
       openPluginsFolder: OpenPluginsFolder
       runPluginCommand: RunPluginCommand
       callPluginHost: CallPluginHost
+      interviewPluginWizard: InterviewPluginWizard
+      createGeneratedPlugin: CreateGeneratedPlugin
     }
   }
 }

@@ -74,6 +74,7 @@ export type VerifiedLlmConnection = {
 export type LlmSettings = {
     provider: LlmProvider
     model: string
+    pluginWizardModel: string
     imageRecognitionModel: string
     localBaseUrl: string
     polishDictation: boolean
@@ -82,12 +83,77 @@ export type LlmSettings = {
     verifiedImageRecognitionConnection?: VerifiedLlmConnection
 }
 
+export type CalendarItemStatus =
+    | 'pending_validation'
+    | 'verified'
+    | 'uncertain'
+    | 'resolved'
+    | 'dismissed'
+
+export type CalendarItemResolution = {
+    type: 'validated' | 'accepted_suggestion' | 'custom_time' | 'manual_edit'
+    resolvedAt: number
+}
+
+export type CalendarItemGoogleLink = {
+    calendarId: string
+    eventId: string
+    etag?: string
+    remoteUpdatedAt?: number
+    lastSyncedAt: number
+    lastSyncedLocalHash: string
+}
+
+export type CalendarItem = {
+    id: string
+    blockId?: string
+    source: 'note' | 'google'
+    sourceOrder: number
+    sourceText: string
+    sourceFingerprint: string
+    sourceBlockUpdatedAt?: number
+    title: string
+    excerpt: string
+    status: CalendarItemStatus
+    confidence: number
+    start?: string
+    end?: string
+    allDay: boolean
+    timeZone: string
+    suggestedStart?: string
+    suggestedEnd?: string
+    resolution?: CalendarItemResolution
+    google?: CalendarItemGoogleLink
+    createdAt: number
+    updatedAt: number
+    // Synced deletions remain as local tombstones until Google confirms the
+    // matching external event was removed.
+    deletedAt?: number
+}
+
+export type GoogleCalendarSettings = {
+    enabled: boolean
+    pushEnabled: boolean
+    pullEnabled: boolean
+    autoSyncMinutes: number
+    connectedEmail?: string
+    hasOAuthClient: boolean
+    isConnected: boolean
+    lastSyncAt?: number
+    lastSyncStatus: 'idle' | 'success' | 'error'
+    lastSyncMessage?: string
+}
+
 export type AppSettings = {
     blockWindowMinutes: number
     pinnedGoalIds: string[]
     captureMode: CaptureMode
     dictationMode: DictationMode
+    onboardingCompleted: boolean
+    onboardingSkipped: boolean
+    onboardingCompletedAt?: number
     llm: LlmSettings
+    googleCalendar: GoogleCalendarSettings
     hasWhisprflowApiKey: boolean
     hasGeminiApiKey: boolean
     hasOpenaiApiKey: boolean

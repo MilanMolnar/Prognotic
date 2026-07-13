@@ -1,11 +1,17 @@
 import { defaultSettings } from './constants'
-import { isImageRecognitionReady, isImageRecognitionSelectionVerified, isLlmSelectionVerified } from './llmSettings'
+import {
+    isImageRecognitionReady,
+    isImageRecognitionSelectionVerified,
+    isLlmSelectionVerified,
+    resolvePluginWizardModel
+} from './llmSettings'
 import { describe, expect, it } from 'vitest'
 
 describe('LLM settings', () => {
     it('keeps AI block naming opt-in by default', () => {
         expect(defaultSettings.llm.aiBlockNameSummary).toBe(false)
         expect(defaultSettings.llm.imageRecognitionModel).toBe('')
+        expect(defaultSettings.llm.pluginWizardModel).toBe('')
     })
 
     it('verifies only an exact non-empty provider and model pair', () => {
@@ -15,6 +21,12 @@ describe('LLM settings', () => {
         expect(isLlmSelectionVerified({ provider: 'gemini', model: 'gemini-test ', verifiedConnection })).toBe(false)
         expect(isLlmSelectionVerified({ provider: 'gemini', model: '', verifiedConnection })).toBe(false)
         expect(isLlmSelectionVerified({ provider: 'gemini', model: 'gemini-test' })).toBe(false)
+    })
+
+    it('uses the active model unless the plugin wizard has an override', () => {
+        expect(resolvePluginWizardModel({ model: 'active-model', pluginWizardModel: '' })).toBe('active-model')
+        expect(resolvePluginWizardModel({ model: 'active-model', pluginWizardModel: 'wizard-model' })).toBe('wizard-model')
+        expect(resolvePluginWizardModel({ model: 'active-model', pluginWizardModel: '   ' })).toBe('active-model')
     })
 
     it('requires a separate exact image-recognition verification pair', () => {

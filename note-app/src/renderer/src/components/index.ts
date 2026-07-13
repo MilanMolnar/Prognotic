@@ -14,6 +14,8 @@ export * from "./BlockPanel"
 export * from "./CaptureBar"
 export * from "./CaptureModeToggle"
 export * from "./DictationButton"
+export * from './DocumentCaptureButton'
+export * from './DocumentCaptureModal'
 export * from './ImageRecognitionButton'
 export * from './ImageRecognitionModal'
 export * from "./NaturalCaptureEditor"
@@ -29,6 +31,9 @@ export * from './NoteBlockPreviewModal'
 export * from './SettingInfoButton'
 export * from './SettingInfoModal'
 export * from './PluginManagerModal'
+export * from './PluginWizardModal'
 export * from './PluginView'
 export * from './BlockDragOverlay'
 export * from './BlockMoveDialog'
+export * from './CalendarView'
+export * from './CalendarResolutionDialog'

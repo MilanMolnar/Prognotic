@@ -1,5 +1,5 @@
 import { MDXEditorMethods } from "@mdxeditor/editor";
-import { SelectedBlock, useBlockActions, useBlocks } from "@renderer/context";
+import { SelectedBlock, useBlockActions, useBlocks, useCalendarActions } from "@renderer/context";
 import { NoteContent } from "@shared/models";
 import { RefObject, useEffect, useMemo, useRef } from "react";
 import { throttle, DebouncedFuncLeading } from "lodash"
@@ -16,6 +16,7 @@ type UseMarkdownEditorResult = {
 export const useMarkdownEditor = (): UseMarkdownEditorResult => {
     const { selectedBlock, contentVersion } = useBlocks();
     const { saveBlock } = useBlockActions()
+    const { extractBlockCalendar } = useCalendarActions()
     const editorRef = useRef<MDXEditorMethods>(null)
     const selectedBlockId = selectedBlock?.id ?? null
 
@@ -44,6 +45,7 @@ export const useMarkdownEditor = (): UseMarkdownEditorResult => {
 
         if (content != null){
             await saveBlock({content : content})
+            await extractBlockCalendar(selectedBlock.id)
         }
     }
 

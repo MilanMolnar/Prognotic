@@ -91,15 +91,15 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
   if (!feedBlocks) return null
 
   return (
-    <div ref={scrollRef} className={cn('overflow-y-auto', className)} {...props}>
+    <div data-tour="block-feed" ref={scrollRef} className={cn('overflow-y-auto', className)} {...props}>
       {isEmpty(feedBlocks) ? (
         <div className="text-sm text-center text-zinc-500 mt-5">
           Nothing captured here yet — write something below!
         </div>
       ) : (
         <ul className="space-y-3">
-          {feedBlocks.map((block) => (
-            <li key={block.id} ref={registerItemRef(block.id)}>
+          {feedBlocks.map((block, index) => (
+            <li data-tour={index === feedBlocks.length - 1 ? 'newest-block' : undefined} key={block.id} ref={registerItemRef(block.id)}>
               <BlockCard
                 block={block}
                 content={blockContents[block.id]}

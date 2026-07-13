@@ -1,6 +1,7 @@
 import { useGoalActions } from '@renderer/context'
 import { Goal } from '@shared/models'
 import { JSX, useEffect, useState } from 'react'
+import { onboardingEvents } from '@renderer/onboarding/events'
 
 export type GoalDialogProps = {
   onClose: () => void
@@ -23,6 +24,11 @@ export const GoalDialog = ({ onClose, goal, mode = 'rename' }: GoalDialogProps):
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  useEffect(() => {
+    window.addEventListener(onboardingEvents.closeGoalDialog, onClose)
+    return () => window.removeEventListener(onboardingEvents.closeGoalDialog, onClose)
+  }, [onClose])
+
   const handleConfirm = async (): Promise<void> => {
     const trimmedName = name.trim()
     if (!trimmedName || isSubmitting) return
@@ -43,6 +49,7 @@ export const GoalDialog = ({ onClose, goal, mode = 'rename' }: GoalDialogProps):
       onClick={onClose}
     >
       <div
+        data-tour="goal-dialog"
         className="w-96 rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >

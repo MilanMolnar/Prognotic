@@ -1,0 +1,247 @@
+PROGNOTIC_PLUGIN_AI_REFERENCE=v1
+HUMAN_DEPTH=docs/PLUGINS.md
+PURPOSE=LLM codegen/interview reference for plugin.json + index.cjs. Emit only supported v1 fields.
+
+[FORMAT_INVARIANTS]
+folder=one immediate child of ~/NoteMark/plugins/{folderName}/
+required_files=plugin.json,index.cjs (entry may be another relative .js/.cjs for hand-written plugins; wizard always uses index.cjs)
+signature="prognotic-plugin/v1" ; metadata format marker, NOT cryptographic signing
+runtime=main-process CommonJS; export activate(host) or default.activate(host)
+renderer_rule=plugin JS is never loaded by renderer
+ui_rule=host-rendered catalog only; no custom React/HTML/CSS/DOM/iframe/renderer bundle
+id=^[a-z][a-z0-9-]{0,63}$ ; stable; block namespace is plugin:{id}
+name=nonblank <=80 chars
+version=semver-like ^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$ <=80 chars
+description=nonblank <=500 chars
+entry=nonblank relative path <=240 chars ending .js or .cjs; reject absolute, drive path, or any .. segment
+permissions.blocks=optional; only "own"
+permissions.ai=optional boolean; MUST be true if ai.systemPrompt or any action.aiPrompt exists or host.ai.complete is called
+ai.systemPrompt=optional nonblank <=24000 chars
+sidebar.label=required when sidebar exists; nonblank <=60 chars
+sidebar.icon=choose utensils|leaf|heart|sparkles|puzzle ; unknown strings <=40 validate but render as puzzle
+manifest_file_limit=<256000 bytes during discovery
+discovery=folder names lexical; first valid duplicate id wins; invalid folder does not reserve id
+enable=manual trust action; activation timeout 10000ms; every UI-declared command must be registered
+refresh=manifest/entry mtime change deactivates+reactivates enabled plugin
+
+[MANIFEST_SCHEMA]
+PluginManifest={
+ id:string,name:string,version:string,description:string,
+ signature:"prognotic-plugin/v1",entry:string,
+ permissions?:{blocks?:"own",ai?:boolean},
+ ai?:{systemPrompt?:string},
+ sidebar?:{label:string,icon?:string},
+ configSchema?:ConfigField[0..50],
+ ui?:NoteFeedUi
+}
+Emit no invented top-level fields. Wizard fixes version="1.0.0", entry="index.cjs", permissions.blocks="own".
+
+[CONFIG_SCHEMA]
+common={key,label,description?}
+key=^[a-z][a-zA-Z0-9_-]{0,63}$ ; unique within schema
+label=nonblank <=80; description=optional nonblank <=240
+string={...common,type:"string",default?:string}; runtime value <=10000 chars; generate default <=10000
+number={...common,type:"number",default?:finite,min?:finite,max?:finite}; min<=max; default within range
+boolean={...common,type:"boolean",default?:boolean}
+select={...common,type:"select",options:[1..50]{label,value},default?:string}; option label <=80; value nonblank <=120 and unique; default must match option
+read=const config=await host.getConfig()
+security=config/storage are not credential stores; never request API keys,passwords,tokens,secrets
+
+[UI_CATALOG]
+NoteFeedUi={type:"note-feed",layout?:LayoutElement[1..30],emptyState?,capture?,stats?,entry?,editCommand?,deleteCommand?,actions?}
+wizard_rule=always use explicit layout; at most one list/grouped-list
+layout_string=header|capture|stat-row|list|grouped-list|empty-state
+layout_object types=header|capture|stat-row|list|grouped-list|empty-state|section-label|action
+header={type:"header",title?:string<=80,description?:string<=500,showReviewCount?:boolean}
+capture={type:"capture",command:Command,label:string<=60,placeholder?:string<=140}; command input {text}
+capture shorthand "capture" requires ui.capture with same fields
+stat-row={type:"stat-row",items?:Stat[1..10]}; Stat={key:"today"|"unvisited"|"total",label:string<=60}; keys unique; shorthand uses ui.stats or host defaults
+list={type:"list",entry?:Entry}; command inputs depend on Entry
+grouped-list={type:"grouped-list",groupBy?:"today-recent"|"day",labels?:{today?:string<=60,recent?:string<=60},entry?:Entry}
+entry={type:"entry",content?:"body"|"excerpt",showTimestamp?:boolean,showReviewBadge?:boolean,editor?:EntryEditor,deleteCommand?:Command,actions?:Action[0..20]}
+entry-editor={type:"entry-editor",command:Command}; save input {blockId,content}
+entry deleteCommand input={blockId}
+entry action input={blockId}
+top-level action input={}
+action={type:"action",command:Command,label:string<=60,tone?:"default"|"ai"|"review",showWhen?:"always"|"unvisited",aiPrompt?:string<=12000}
+empty-state={type:"empty-state",message?:string<=180}; only visible when loaded list is empty
+section-label={type:"section-label",label:string<=80}; object form only
+ui.emptyState<=180; ui.actions<=20; action rules identical
+Command=^[a-z][a-zA-Z0-9._-]{0,79}$
+required_wiring=union(capture commands, editor commands, delete commands, entry actions, top actions) == commands registered by activate(host), at least as a subset; wizard emits exact union
+legacy=layout omitted renders header -> optional capture -> empty-state -> grouped-list and may use editCommand/deleteCommand/actions; wizard does not generate legacy form
+
+[COMMAND_RUNTIME]
+activate=(host)=>({commands:{[Command]:(input)=>void|{message?,blockId?}|Promise<same>},deactivate?:async()=>void})
+input_copy={text?:string,blockId?:string,content?:string}
+capture_text_limit=100000; editor_content_limit=1000000
+return.message<=500 after host truncation; return.blockId<=100 after host truncation
+failure=throw new Error(userSafeMessage)
+success=prefer host.notify(message,{tone:"info"|"success"|"error"}); nonblank <=500; max 20 retained per command
+required_text_pattern=typeof value==='string' ? value.trim() : ''; throw if empty
+required_block_pattern=typeof input.blockId==='string' ? input.blockId.trim() : ''; throw if empty
+create_pattern=const block=await host.blocks.createBlock(content,[host.categoryId]); return {blockId:block.id}
+review_pending=await host.blocks.setPresence(block.id,false)
+review_done=await host.blocks.acknowledgePresence(blockId)
+edit_pattern=await host.blocks.getMeta(blockId); await host.blocks.writeBlock(blockId,content)
+ai_error_pattern=const result=await host.ai.complete(...); if(result.error) throw new Error(result.error)
+
+[HOST_API]
+identity:
+ host.pluginId:string
+ host.categoryId:string // plugin:{id}
+ host.getConfig():Promise<Record<string,string|number|boolean>>
+blocks:
+ host.blocks.createBlock(content:string,categories?:(string|null)[]):Promise<OwnedBlockMeta>
+ host.blocks.readBlock(id:string):Promise<{block:OwnedBlockMeta,content:string}>
+ host.blocks.getMeta(id:string):Promise<{id,createdAt,updatedAt,excerpt,aiLabel?,presence}>
+ host.blocks.writeBlock(id:string,content:string):Promise<OwnedBlockMeta>
+ host.blocks.deleteBlock(id:string):Promise<boolean>
+ host.blocks.deleteBlockIfEmpty(id:string):Promise<boolean>
+ host.blocks.updateBlockCategories(id:string,categories:(string|null)[]):Promise<OwnedBlockMeta>
+ host.blocks.appendToBlock(id:string,text:string):Promise<OwnedBlockMeta>
+ host.blocks.listBlocks(filter?:{category?,createdAfter?,updatedAfter?,limit?}):Promise<{block,content}[]>
+ host.blocks.getPresence(id:string,category?:string):Promise<GoalPresence|null>
+ host.blocks.setPresence(id:string,visited:boolean,category?:string):Promise<OwnedBlockMeta>
+ host.blocks.acknowledgePresence(id:string,category?:string):Promise<OwnedBlockMeta>
+block_denials=all id operations require owned plugin:{id} category; create/update categories omitted or exactly [host.categoryId]; presence category omitted or host.categoryId
+block_limits=content<=1000000 chars; append<=100000 chars; list limit clamped 1..200 default100, newest created first; createdAfter/updatedAfter finite
+OwnedBlockMeta={id,file,createdAt,updatedAt,categories:(string|null)[],excerpt,aiLabel?,goalPresence?}
+GoalPresence={source:"user"|"routed"|"assistant"|"research"|"plugin",visited:boolean}
+ai:
+ host.ai.complete({prompt:string,system?:string,blockId?:string,maxTokens?:number}):Promise<{text:string}|{error:string}>
+ai_limits=permissions.ai true; prompt nonblank <=12000; system<=4000; blockId owned; referenced content<=8000; maxTokens clamp64..2048 default800; timeout60000ms
+ai_readiness_error="AI is not ready. Choose a model and test the connection in Settings."
+ai_privacy=uses app-wide verified connection; plugin cannot read provider,model,credentials,tokens
+ai_layers=immutable host baseline -> manifest ai.systemPrompt -> matching action.aiPrompt -> call system -> user prompt + optional owned block data
+storage:
+ host.storage.get(key):Promise<JSONValue|null>
+ host.storage.set(key,value:JSONValue):Promise<boolean>
+storage_key=^[a-z][a-zA-Z0-9._-]{0,79}$
+storage_value=finite acyclic JSON scalar/array/plain-object; <=64000 UTF-8 bytes; nesting<=12; visited nodes<=5000; object key<=100; deny __proto__|constructor|prototype
+storage_file=~/NoteMark/plugin-data/{id}.json; <=256000 bytes; <=128 keys; atomic; no delete (set null)
+storage_denials=no secrets,credentials,large note content,foreign plugin data
+notify:
+ host.notify(message:string,{tone?:"info"|"success"|"error"}):{message,tone}
+
+[WIZARD_CODEGEN_POLICY]
+These are wizard safety/product rules, not claims that the trusted CommonJS runtime cryptographically enforces them.
+ALLOW=self-contained index.cjs; host API; standard JS language/Date/JSON; no dependencies
+FORBID=require/import/dynamic import; fs/path/os/process/global/Buffer; child processes; network/fetch/WebSocket; eval/new Function; native modules; npm dependencies; extra files; background timers; custom UI/DOM; renderer code; cross-plugin or non-owned block access; credentials/secrets; marketplace/install/update code
+REFRAME custom dashboard -> note-feed layout; chart -> stat-row + Markdown analysis; secret/API integration -> app-wide host.ai only or explain unsupported; external/cross-plugin data -> user-captured own blocks; marketplace request -> local wizard-generated folder
+TRUST=do not auto-enable; user confirms plan before files; user enables afterward
+
+[CODEGEN_TEMPLATE_MAPPING]
+1 capture chosen => layout capture + command(input.text) creates owned block; optionally setPresence(false)
+2 editable entries => Entry.editor command(input.blockId,input.content) validates owned id then writes
+3 deletable entries => Entry.deleteCommand(input.blockId) deletes owned block
+4 review workflow => capture/edit/AI setPresence(false); review action showWhen:"unvisited",tone:"review" calls acknowledgePresence
+5 stats => stat-row items only from today|unvisited|total; no custom calculation UI
+6 flat chronology => list; today/earlier => grouped-list groupBy:"today-recent"; calendar days => groupBy:"day"
+7 AI action => permissions.ai:true + optional plugin ai.systemPrompt + action tone:"ai" + action.aiPrompt + command host.ai.complete with owned blockId and error branch
+8 config choice => configSchema field + await host.getConfig() inside affected command; never capture secrets
+9 top action => layout action, input {}; entry-specific action => Entry.actions, input {blockId}
+10 every interactive layout declaration => same-named registered command
+
+[INTERVIEW_DECISION_CHECKLIST]
+Ask one adaptive question only when its answer changes plugin.json or index.cjs. Infer safe defaults. Target 5-8 total questions; one extra narrow follow-up only if necessary.
+D1 scope_fit: can goal be expressed as owned Markdown entries in note-feed? If no, state v1 limit and offer bounded reframe.
+D2 entry_model: what one capture represents; required heading/body format; never invent structured fields the host cannot render separately.
+D3 capture: free-text prompt/label; whether new entries need review.
+D4 list: flat vs today/recent vs day; body vs excerpt; timestamp/review badge.
+D5 operations: edit,delete,entry actions,top actions; each action must map to an allowed input shape.
+D6 review: what creates unvisited state and what action acknowledges it.
+D7 stats: only today,total,unvisited; reframe other metrics as Markdown AI output or omit.
+D8 AI: exact user benefit; only app-wide host.ai; prompt boundaries; mark permissions.ai only when used.
+D9 config: only string/number/boolean/select and non-secret values that change command behavior.
+D10 sidebar: label + one allowed icon.
+D11 identity: concise unique id/folder slug; version fixed 1.0.0.
+D12 final_plan: summarize entry model, layout, commands/input shapes, AI/config/review, id/folder, manual enable; require explicit Confirm.
+
+[POST_GENERATION_SELF_CHECK]
+C1 parse plugin.json as one JSON object; no fences/comments/trailing commas
+C2 validate signature/id/version/name/description/entry/permissions/config/UI limits above
+C3 entry exactly index.cjs for wizard; source nonblank CommonJS; no fences; WIZARD_CODEGEN_POLICY passes
+C4 derive UI command set; compare exactly to Object.keys(registration.commands); no missing/invalid handler
+C5 command inputs match placement: capture=text, editor=blockId+content, nested action/delete=blockId, top action=none
+C6 every block id is input/host-returned and ownership-checked by host; categories omitted or [host.categoryId]
+C7 AI calls only with permissions.ai:true; each AI action has bounded action.aiPrompt; handle {error}; referenced block owned
+C8 config reads correspond to declared keys/types; no secret fields
+C9 pending review uses setPresence(false); completion uses acknowledgePresence; showWhen unvisited only where intended
+C10 messages are user-safe; no credential/provider claims; no invented host method
+C11 plugin id and folder are collision-free (suffix -2,-3,... if needed)
+C12 preflight activate registration without writes; stage plugin.json+index.cjs; atomic folder move; persist AI origin; refresh catalog; remain disabled
+
+[EXAMPLE_1_SIMPLE_LOG_PLUGIN_JSON]
+{"id":"simple-log","name":"Simple Log","version":"1.0.0","description":"Capture short log entries.","signature":"prognotic-plugin/v1","entry":"index.cjs","permissions":{"blocks":"own"},"sidebar":{"label":"Simple Log","icon":"puzzle"},"ui":{"type":"note-feed","layout":["header","capture",{"type":"empty-state","message":"No entries yet."},"grouped-list"],"capture":{"command":"addEntry","label":"Add entry","placeholder":"What happened?"}}}
+
+[EXAMPLE_1_SIMPLE_LOG_INDEX_CJS]
+'use strict'
+exports.activate = (host) => ({
+  commands: {
+    addEntry: async (input) => {
+      const text = typeof input.text === 'string' ? input.text.trim() : ''
+      if (!text) throw new Error('Write an entry first.')
+      const block = await host.blocks.createBlock(text, [host.categoryId])
+      host.notify('Entry added.', { tone: 'success' })
+      return { blockId: block.id }
+    }
+  }
+})
+
+[EXAMPLE_2_AI_REVIEW_PLUGIN_JSON]
+{"id":"training-log","name":"Training Log","version":"1.0.0","description":"Log workouts, analyze an entry, and review the result.","signature":"prognotic-plugin/v1","entry":"index.cjs","permissions":{"blocks":"own","ai":true},"ai":{"systemPrompt":"Analyze only stated training facts. Label uncertainty and avoid medical advice."},"sidebar":{"label":"Training","icon":"heart"},"configSchema":[{"key":"analysisStyle","label":"Analysis style","type":"select","default":"brief","options":[{"label":"Brief","value":"brief"},{"label":"Detailed","value":"detailed"}]}],"ui":{"type":"note-feed","layout":["header","capture",{"type":"stat-row","items":[{"key":"today","label":"today"},{"key":"unvisited","label":"need review"},{"key":"total","label":"entries"}]},{"type":"empty-state","message":"No workouts logged."},{"type":"grouped-list","groupBy":"day","entry":{"type":"entry","content":"body","showTimestamp":true,"showReviewBadge":true,"editor":{"type":"entry-editor","command":"saveEntry"},"deleteCommand":"deleteEntry","actions":[{"type":"action","command":"analyzeEntry","label":"Analyze","tone":"ai","aiPrompt":"Return concise Markdown observations and one cautious next-step suggestion."},{"type":"action","command":"markReviewed","label":"Mark reviewed","tone":"review","showWhen":"unvisited"}]}}],"capture":{"command":"addEntry","label":"Log workout","placeholder":"Exercise, sets, reps, weight..."}}}
+
+[EXAMPLE_2_AI_REVIEW_INDEX_CJS]
+'use strict'
+const blockId = (input) => {
+  const id = typeof input.blockId === 'string' ? input.blockId.trim() : ''
+  if (!id) throw new Error('Choose an entry first.')
+  return id
+}
+exports.activate = (host) => ({
+  commands: {
+    addEntry: async (input) => {
+      const text = typeof input.text === 'string' ? input.text.trim() : ''
+      if (!text) throw new Error('Describe the workout first.')
+      const block = await host.blocks.createBlock(`# Workout\n\n${text}`, [host.categoryId])
+      await host.blocks.setPresence(block.id, false)
+      host.notify('Workout logged for review.', { tone: 'success' })
+      return { blockId: block.id }
+    },
+    saveEntry: async (input) => {
+      const id = blockId(input)
+      const content = typeof input.content === 'string' ? input.content.trim() : ''
+      if (!content) throw new Error('An entry cannot be empty.')
+      await host.blocks.getMeta(id)
+      await host.blocks.writeBlock(id, content)
+      await host.blocks.setPresence(id, false)
+      host.notify('Entry saved for review.', { tone: 'success' })
+      return { blockId: id }
+    },
+    deleteEntry: async (input) => {
+      await host.blocks.deleteBlock(blockId(input))
+      host.notify('Entry deleted.', { tone: 'success' })
+    },
+    analyzeEntry: async (input) => {
+      const id = blockId(input)
+      const config = await host.getConfig()
+      const result = await host.ai.complete({
+        blockId: id,
+        prompt: `Analyze this workout. Use a ${config.analysisStyle === 'detailed' ? 'detailed' : 'brief'} response.`,
+        maxTokens: 700
+      })
+      if (result.error) throw new Error(result.error)
+      await host.blocks.appendToBlock(id, `## Analysis\n\n${result.text}`)
+      await host.blocks.setPresence(id, false)
+      host.notify('Analysis added for review.', { tone: 'info' })
+      return { blockId: id }
+    },
+    markReviewed: async (input) => {
+      const id = blockId(input)
+      await host.blocks.acknowledgePresence(id)
+      host.notify('Entry reviewed.', { tone: 'success' })
+      return { blockId: id }
+    }
+  }
+})

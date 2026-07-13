@@ -17,6 +17,8 @@ type UseNaturalCaptureResult = {
     editorRef: RefObject<MDXEditorMethods | null>
     handleChange: (markdown: string) => void
     appendTranscript: (chunk: string) => void
+    appendDocument: (text: string) => void
+    currentContentLength: number
 }
 
 // Drives the natural-mode writing surface: a document-style editor that IS
@@ -51,6 +53,7 @@ export const useNaturalCapture = ({
     // Frozen at mount: MDXEditor treats markdown as the initial value only,
     // and later cache updates for this block must not disturb typing.
     const [initialContent] = useState(resumeContent)
+    const [currentContentLength, setCurrentContentLength] = useState(resumeContent.length)
 
     const persistNow = useCallback(async (): Promise<void> => {
         const content = latestRef.current
@@ -80,6 +83,7 @@ export const useNaturalCapture = ({
     const handleChange = useCallback(
         (markdown: string): void => {
             latestRef.current = markdown
+            setCurrentContentLength(markdown.length)
             if (throttleTimerRef.current !== null) return
             throttleTimerRef.current = window.setTimeout(() => {
                 throttleTimerRef.current = null
@@ -89,22 +93,31 @@ export const useNaturalCapture = ({
         [enqueuePersist]
     )
 
-    // Dictated text lands at the end of the document (with smart spacing) so
-    // the user can review it in place; it persists through the same throttled
-    // save as typing.
-    const appendTranscript = useCallback(
-        (chunk: string): void => {
+    const appendCaptureText = useCallback(
+        (chunk: string, blockBoundary: boolean): void => {
             const trimmed = chunk.trim()
             if (!trimmed) return
 
             const current = editorRef.current?.getMarkdown() ?? latestRef.current ?? savedRef.current
-            const needsSpace = current.length > 0 && !/\s$/.test(current)
-            const next = `${current}${needsSpace ? ' ' : ''}${trimmed}`
+            const prefix = blockBoundary
+                ? current.length === 0 || /\n\s*\n$/.test(current)
+                    ? ''
+                    : /\n$/.test(current) ? '\n' : '\n\n'
+                : current.length > 0 && !/\s$/.test(current) ? ' ' : ''
+            const next = `${current}${prefix}${trimmed}`
             editorRef.current?.setMarkdown(next)
             handleChange(next)
         },
         [handleChange]
     )
+
+    const appendTranscript = useCallback((chunk: string): void => {
+        appendCaptureText(chunk, false)
+    }, [appendCaptureText])
+
+    const appendDocument = useCallback((text: string): void => {
+        appendCaptureText(text, true)
+    }, [appendCaptureText])
 
     // Manual finalize (Ctrl+S): flush whatever the surface holds, then close
     // the open block — it becomes a normal closed card below (or, if left
@@ -133,6 +146,7 @@ export const useNaturalCapture = ({
             })
             .catch(() => undefined)
         editorRef.current?.setMarkdown('')
+        setCurrentContentLength(0)
     }, [updateBlockContent, closeOpenBlock])
 
     useEffect(() => {
@@ -178,6 +192,8 @@ export const useNaturalCapture = ({
             })
             .catch(() => undefined)
         editorRef.current?.setMarkdown('')
+        const resetLengthFrame = requestAnimationFrame(() => setCurrentContentLength(0))
+        return () => cancelAnimationFrame(resetLengthFrame)
     }, [openBlockId, updateBlockContent, cleanupBlockIfEmpty, finalizeBlock])
 
     // Flush unsaved text before the surface goes away (mode or category
@@ -204,6 +220,8 @@ export const useNaturalCapture = ({
         initialContent,
         editorRef,
         handleChange,
-        appendTranscript
+        appendTranscript,
+        appendDocument,
+        currentContentLength
     }
 }

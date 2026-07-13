@@ -9,6 +9,7 @@ import {
 } from './BlocksContext'
 import { useGoalActions, useGoals } from './GoalsContext'
 import { useSettings } from './SettingsContext'
+import { useCalendarActions } from './CalendarContext'
 
 const sortBlocks = (blocks: BlockMeta[]): BlockMeta[] =>
     [...blocks].sort((a, b) => b.createdAt - a.createdAt)
@@ -30,6 +31,7 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     const { settings } = useSettings()
     const { selectedCategory } = useGoals()
     const { registerPersistedGoal } = useGoalActions()
+    const { extractBlockCalendar, refreshItems: refreshCalendarItems } = useCalendarActions()
     const windowMs = settings.blockWindowMinutes * 60_000
 
     useEffect(() => {
@@ -140,7 +142,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         })
         setOpenBlockId((prev) => (prev === id ? null : prev))
         setSelectedBlockId((prev) => (prev === id ? null : prev))
-    }, [])
+        await refreshCalendarItems()
+    }, [refreshCalendarItems])
 
     const classifyQuickNote = useCallback(async (id: string) => {
         const block = blocksRef.current?.find((item) => item.id === id)
@@ -188,8 +191,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     }, [])
 
     const finalizeBlock = useCallback(async (id: string): Promise<void> => {
-        await Promise.all([nameFinalizedBlock(id), classifyQuickNote(id)])
-    }, [nameFinalizedBlock, classifyQuickNote])
+        await Promise.all([nameFinalizedBlock(id), classifyQuickNote(id), extractBlockCalendar(id)])
+    }, [nameFinalizedBlock, classifyQuickNote, extractBlockCalendar])
 
     // Close the open block once its idle window elapses. Every write bumps
     // the block's updatedAt, which reschedules this timeout — that *is* the
@@ -275,6 +278,7 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
                 if (selectedBlockRef.current?.id === updatedMeta.id) {
                     setContentVersion((version) => version + 1)
                 }
+                void extractBlockCalendar(updatedMeta.id)
                 return
             }
             // The block vanished on disk — fall through and start a new one.
@@ -284,7 +288,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         setBlocks((prev) => (prev ? [meta, ...prev] : [meta]))
         setBlockContents((prev) => ({ ...prev, [meta.id]: trimmed }))
         setOpenBlockId(meta.id)
-    }, [])
+        void extractBlockCalendar(meta.id)
+    }, [extractBlockCalendar])
 
     const updateBlockContent = useCallback(async (id: string, newContent: NoteContent) => {
         const updatedMeta = await window.context.writeBlock(id, newContent)
@@ -300,6 +305,10 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         )
         setBlockContents((prev) => ({ ...prev, [updatedMeta.id]: newContent.content }))
 
+        if (selectedBlockIdRef.current !== id && openBlockIdRef.current !== id) {
+            void extractBlockCalendar(id)
+        }
+
         // A write that empties a block deletes it once the block is no longer
         // in use; blocks still selected or open are cleaned when they close.
         if (
@@ -309,7 +318,7 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         ) {
             void cleanupBlockIfEmpty(id)
         }
-    }, [cleanupBlockIfEmpty])
+    }, [cleanupBlockIfEmpty, extractBlockCalendar])
 
     const saveBlock = useCallback(
         async (newContent: NoteContent) => {
@@ -404,7 +413,8 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         })
         setOpenBlockId((prev) => (prev === id ? null : prev))
         setSelectedBlockId((prev) => (prev === id ? null : prev))
-    }, [])
+        await refreshCalendarItems()
+    }, [refreshCalendarItems])
 
     const stateValue: BlocksState = useMemo(
         () => ({

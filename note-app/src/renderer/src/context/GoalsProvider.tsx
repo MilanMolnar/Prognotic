@@ -16,6 +16,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     // null = Quick Notes, the always-available default capture target.
     const [selectedCategory, setSelectedCategory] = useState<CategoryKey>(null)
     const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null)
+    const [isCalendarSelected, setIsCalendarSelected] = useState(false)
     const { updateSettings } = useSettingsActions()
 
     useEffect(() => {
@@ -36,10 +37,17 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     const selectCategory = useCallback((key: CategoryKey) => {
         setSelectedCategory(key)
         setSelectedPluginId(null)
+        setIsCalendarSelected(false)
     }, [])
 
     const selectPlugin = useCallback((pluginId: string | null) => {
         setSelectedPluginId(pluginId)
+        setIsCalendarSelected(false)
+    }, [])
+
+    const selectCalendar = useCallback(() => {
+        setSelectedPluginId(null)
+        setIsCalendarSelected(true)
     }, [])
 
     const registerPersistedGoal = useCallback((goal: Goal) => {
@@ -57,6 +65,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         registerPersistedGoal(goal)
         setSelectedCategory(goal.id)
         setSelectedPluginId(null)
+        setIsCalendarSelected(false)
     }, [registerPersistedGoal])
 
     const renameGoal = useCallback(async (id: string, name: string, description: string, routingHints = '') => {
@@ -78,13 +87,13 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     }, [updateSettings])
 
     const stateValue: GoalsState = useMemo(
-        () => ({ goals, selectedCategory, selectedPluginId }),
-        [goals, selectedCategory, selectedPluginId]
+        () => ({ goals, selectedCategory, selectedPluginId, isCalendarSelected }),
+        [goals, selectedCategory, selectedPluginId, isCalendarSelected]
     )
 
     const actionsValue: GoalsActions = useMemo(
-        () => ({ selectCategory, selectPlugin, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
-        [selectCategory, selectPlugin, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
+        () => ({ selectCategory, selectPlugin, selectCalendar, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
+        [selectCategory, selectPlugin, selectCalendar, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
     )
 
     return (

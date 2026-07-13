@@ -12,6 +12,7 @@ type UseQuickInputResult = {
     handleKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
     applyFormat: (format: MarkdownFormat) => void
     appendTranscript: (chunk: string) => void
+    appendDocument: (text: string) => void
 }
 
 export const useQuickInput = (): UseQuickInputResult => {
@@ -75,8 +76,7 @@ export const useQuickInput = (): UseQuickInputResult => {
         });
     };
 
-    // Inserts dictated text at the caret so the user can review before Send.
-    const appendTranscript = useCallback((chunk: string): void => {
+    const insertCaptureText = useCallback((chunk: string, blockBoundary: boolean): void => {
         const trimmed = chunk.trim();
         if (!trimmed) return;
 
@@ -86,16 +86,33 @@ export const useQuickInput = (): UseQuickInputResult => {
         const end = textarea?.selectionEnd ?? prev.length;
         const before = prev.slice(0, start);
         const after = prev.slice(end);
-        const needsSpaceBefore = before.length > 0 && !/\s$/.test(before);
-        const insert = `${needsSpaceBefore ? ' ' : ''}${trimmed}`;
+        const prefix = blockBoundary
+            ? before.length === 0 || /\n\s*\n$/.test(before)
+                ? ''
+                : /\n$/.test(before) ? '\n' : '\n\n'
+            : before.length > 0 && !/\s$/.test(before) ? ' ' : '';
+        const suffix = blockBoundary && after.length > 0
+            ? /^\n\s*\n/.test(after) ? '' : /^\n/.test(after) ? '\n' : '\n\n'
+            : '';
+        const insert = `${prefix}${trimmed}${suffix}`;
         const next = before + insert + after;
-        const cursor = before.length + insert.length;
+        const cursor = before.length + prefix.length + trimmed.length;
         setText(next);
         requestAnimationFrame(() => {
             textarea?.focus();
             textarea?.setSelectionRange(cursor, cursor);
         });
     }, []);
+
+    // Dictation stays inline, while parsed documents get Markdown block
+    // boundaries so headings and tables do not merge into surrounding text.
+    const appendTranscript = useCallback((chunk: string): void => {
+        insertCaptureText(chunk, false)
+    }, [insertCaptureText]);
+
+    const appendDocument = useCallback((text: string): void => {
+        insertCaptureText(text, true)
+    }, [insertCaptureText]);
 
     return {
         text,
@@ -105,6 +122,7 @@ export const useQuickInput = (): UseQuickInputResult => {
         submit,
         handleKeyDown,
         applyFormat,
-        appendTranscript
+        appendTranscript,
+        appendDocument
     };
 }

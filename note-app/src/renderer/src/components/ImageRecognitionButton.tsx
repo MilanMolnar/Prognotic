@@ -19,6 +19,7 @@ export const ImageRecognitionButton = ({
 
     return (
         <button
+            data-tour="image-recognition"
             type="button"
             title="Extract text from an image"
             aria-haspopup="dialog"

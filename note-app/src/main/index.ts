@@ -2,13 +2,17 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, BrowserWindowConstructorOptions, clipboard, ipcMain, session, shell, systemPreferences } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
-import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, applyNewGoalRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setSettings, updateBlockCategories, writeBlock } from './lib'
+import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, applyNewGoalRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setGoogleOAuthClientCredentials, setSettings, updateBlockCategories, writeBlock } from './lib'
 import { toggleMacDictation } from './dictation/macos'
 import { toggleWindowsDictation } from './dictation/windows'
 import { transcribeAudio } from './dictation/wisprflow'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetLlmModels, GetPlugins, GetSettings, OpenPluginsFolder, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, WriteBlock, WriteClipboardText } from '@shared/types'
-import { classifyBlock, listModels, polishTranscript, recognizeImage, runInlineAction, streamAssistant, summarizeBlockName, testConnection, testImageRecognitionConnection } from './llm/router'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OpenPluginsFolder, ParseDocument as ParseDocumentIpc, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument as SummarizeDocumentIpc, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
+import { classifyBlock, listModels, polishTranscript, recognizeImage, runInlineAction, streamAssistant, summarizeBlockName, summarizeDocument, testConnection, testImageRecognitionConnection } from './llm/router'
 import { callPluginHost, ensurePluginsDirectory, initializePlugins, refreshPluginCatalog, removePlugin, runPluginCommand, setPluginConfig, setPluginEnabled } from './plugins'
+import { createGeneratedPlugin, interviewPluginWizard } from './plugins/wizard'
+import { parseDocumentLocally } from './documents'
+import { backfillCalendarFromVault, deleteCalendarItem, extractCalendarForBlock, getCalendarItems, resolveCalendarItem, updateCalendarItem, validateCalendarItem } from './calendar/service'
+import { connectGoogleCalendar, disconnectGoogleCalendar, syncGoogleCalendar } from './calendar/google'
 
 const assistantStreams = new Map<string, AbortController>()
 
@@ -67,7 +71,14 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    try {
+      const target = new URL(details.url)
+      if (target.protocol === 'https:' || target.protocol === 'http:') {
+        void shell.openExternal(target.toString())
+      }
+    } catch {
+      // Malformed and unsupported URLs stay blocked inside the sandbox.
+    }
     return { action: 'deny' }
   })
 
@@ -126,6 +137,26 @@ app.whenReady().then(async () => {
   ipcMain.handle('setSettings', (_, ...args: Parameters<SetSettings>) => setSettings(...args))
   ipcMain.handle('setCredential', (_, ...args: Parameters<SetCredential>) => setCredential(...args))
   ipcMain.handle('clearCredential', (_, name: Parameters<ClearCredential>[0]) => setCredential(name, ''))
+  ipcMain.handle('getCalendarItems', (_, ...args: Parameters<GetCalendarItems>) => getCalendarItems(...args))
+  ipcMain.handle('backfillCalendar', (_, ...args: Parameters<BackfillCalendar>) => backfillCalendarFromVault(...args))
+  ipcMain.handle('extractCalendarForBlock', async (_, ...args: Parameters<ExtractCalendarForBlock>) => {
+    try { return await extractCalendarForBlock(...args) }
+    catch (error) {
+      return {
+        items: await getCalendarItems(),
+        usedAi: false,
+        warning: error instanceof Error ? error.message : 'Calendar extraction failed.'
+      }
+    }
+  })
+  ipcMain.handle('validateCalendarItem', (_, ...args: Parameters<ValidateCalendarItem>) => validateCalendarItem(...args))
+  ipcMain.handle('resolveCalendarItem', (_, ...args: Parameters<ResolveCalendarItem>) => resolveCalendarItem(...args))
+  ipcMain.handle('updateCalendarItem', (_, ...args: Parameters<UpdateCalendarItem>) => updateCalendarItem(...args))
+  ipcMain.handle('deleteCalendarItem', (_, ...args: Parameters<DeleteCalendarItem>) => deleteCalendarItem(...args))
+  ipcMain.handle('configureGoogleCalendar', (_, ...args: Parameters<ConfigureGoogleCalendar>) => setGoogleOAuthClientCredentials(...args))
+  ipcMain.handle('connectGoogleCalendar', (_, ...args: Parameters<ConnectGoogleCalendar>) => connectGoogleCalendar(...args))
+  ipcMain.handle('disconnectGoogleCalendar', (_, ...args: Parameters<DisconnectGoogleCalendar>) => disconnectGoogleCalendar(...args))
+  ipcMain.handle('syncGoogleCalendar', (_, ...args: Parameters<SyncGoogleCalendar>) => syncGoogleCalendar(...args))
   ipcMain.handle('getGoals', (_, ...args: Parameters<GetGoals>) => getGoals(...args))
   ipcMain.handle('createGoal', (_, ...args: Parameters<CreateGoal>) => createGoal(...args))
   ipcMain.handle('renameGoal', (_, ...args: Parameters<RenameGoal>) => renameGoal(...args))
@@ -176,6 +207,14 @@ app.whenReady().then(async () => {
     try { return { text: await recognizeImage(...args) } }
     catch (error) { return { error: error instanceof Error ? error.message : 'Image recognition failed.' } }
   })
+  ipcMain.handle('parseDocument', async (_, ...args: Parameters<ParseDocumentIpc>): Promise<Awaited<ReturnType<ParseDocumentIpc>>> => {
+    try { return await parseDocumentLocally(...args) }
+    catch (error) { return { error: error instanceof Error ? error.message : 'Document parsing failed.' } }
+  })
+  ipcMain.handle('summarizeDocument', async (_, ...args: Parameters<SummarizeDocumentIpc>): Promise<Awaited<ReturnType<SummarizeDocumentIpc>>> => {
+    try { return await summarizeDocument(...args) }
+    catch (error) { return { error: error instanceof Error ? error.message : 'Document summarization failed.' } }
+  })
   ipcMain.handle('startAssistantStream', async (event, requestId: Parameters<StartAssistantStream>[0], message: Parameters<StartAssistantStream>[1], history: Parameters<StartAssistantStream>[2], scope: Parameters<StartAssistantStream>[3], selection: Parameters<StartAssistantStream>[4]) => {
     if (assistantStreams.has(requestId)) return { ok: false, error: 'An assistant request with this id is already running.' }
     const controller = new AbortController()
@@ -213,6 +252,8 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('runPluginCommand', (_, ...args: Parameters<RunPluginCommand>) => runPluginCommand(...args))
   ipcMain.handle('callPluginHost', (_, ...args: Parameters<CallPluginHost>) => callPluginHost(...args))
+  ipcMain.handle('interviewPluginWizard', (_, ...args: Parameters<InterviewPluginWizard>) => interviewPluginWizard(...args))
+  ipcMain.handle('createGeneratedPlugin', (_, ...args: Parameters<CreateGeneratedPlugin>) => createGeneratedPlugin(...args))
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

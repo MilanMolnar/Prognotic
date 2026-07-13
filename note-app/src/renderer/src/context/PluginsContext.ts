@@ -3,7 +3,10 @@ import type {
     PluginBlockRecord,
     PluginCommandInput,
     PluginCommandResult,
-    PluginConfig
+    PluginConfig,
+    PluginWizardInterviewInput,
+    PluginWizardInterviewResult,
+    PluginWizardSpec
 } from '@shared/plugins'
 import { createContext, useContext } from 'react'
 
@@ -27,6 +30,11 @@ export type PluginsActions = {
         command: string,
         input: PluginCommandInput
     ) => Promise<PluginCommandResult>
+    interviewPluginWizard: (input: PluginWizardInterviewInput) => Promise<PluginWizardInterviewResult>
+    createGeneratedPlugin: (
+        spec: PluginWizardSpec,
+        revision?: string
+    ) => Promise<{ error?: string; pluginId?: string; folderName?: string }>
 }
 
 export const PluginsStateContext = createContext<PluginsState | null>(null)

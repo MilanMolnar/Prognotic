@@ -238,6 +238,7 @@ export const ChatPanel = (): JSX.Element => {
   }
 
   return <aside
+    data-tour="chat-panel"
     data-chat-drop-target=""
     className={cn(
       'relative mt-10 shrink-0 border-l border-l-white/10 p-2 flex flex-col',

@@ -2,7 +2,9 @@ import { usePluginActions, usePlugins } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import type { PluginConfig, PluginConfigValue } from '@shared/plugins'
 import { JSX, useEffect, useState } from 'react'
-import { LuClipboard, LuFolderOpen, LuRefreshCw, LuTrash2, LuX } from 'react-icons/lu'
+import { LuClipboard, LuFolderOpen, LuRefreshCw, LuSparkles, LuTrash2, LuX } from 'react-icons/lu'
+import { PluginWizardModal } from './PluginWizardModal'
+import { onboardingEvents } from '@renderer/onboarding/events'
 
 export type PluginManagerModalProps = { onClose: () => void }
 
@@ -19,13 +21,19 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
   const [configuringId, setConfiguringId] = useState<string | null>(null)
   const [draftConfig, setDraftConfig] = useState<PluginConfig>({})
   const [status, setStatus] = useState<string | null>(null)
+  const [isWizardOpen, setIsWizardOpen] = useState(false)
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !isWizardOpen) onClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isWizardOpen, onClose])
+
+  useEffect(() => {
+    window.addEventListener(onboardingEvents.closePluginManager, onClose)
+    return () => window.removeEventListener(onboardingEvents.closePluginManager, onClose)
   }, [onClose])
 
   const runBusy = async (key: string, action: () => Promise<string | null>): Promise<void> => {
@@ -76,8 +84,11 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
         <div className="flex items-start gap-3 border-b border-white/10 p-4">
           <div className="min-w-0 flex-1">
             <h2 className="font-semibold text-zinc-100">Plugins</h2>
-            <p className="mt-1 text-xs text-zinc-500">Install a plugin by copying its folder here, then refresh this list.</p>
+            <p className="mt-1 text-xs text-zinc-500">Copy a local plugin folder and refresh, or create a v1 plugin with AI.</p>
           </div>
+          <button type="button" title="Create plugin with AI" onClick={() => setIsWizardOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-violet-500/40 px-2.5 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10">
+            <LuSparkles className="h-3.5 w-3.5" aria-hidden /> Create with AI
+          </button>
           <button type="button" title="Close plugin manager" onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100">
             <LuX className="h-5 w-5" />
           </button>
@@ -105,6 +116,11 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-zinc-100">{plugin.name}</h3>
+                      {plugin.aiGenerated && (
+                        <span title="Created with AI" aria-label="Created with AI" className="inline-flex text-violet-300">
+                          <LuSparkles className="h-3.5 w-3.5" aria-hidden />
+                        </span>
+                      )}
                       <span className="text-xs text-zinc-500">v{plugin.version}</span>
                       <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px]', plugin.valid ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400')}>{plugin.valid ? 'Ready' : 'Unusable'}</span>
                     </div>
@@ -186,6 +202,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
           })}
         </div>
       </div>
+      {isWizardOpen && <PluginWizardModal onClose={() => setIsWizardOpen(false)} />}
     </div>
   )
 }

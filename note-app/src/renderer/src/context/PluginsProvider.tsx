@@ -1,4 +1,4 @@
-import type { InstalledPlugin, PluginBlockRecord, PluginCatalog, PluginCommandInput, PluginCommandResult, PluginConfig } from '@shared/plugins'
+import type { InstalledPlugin, PluginBlockRecord, PluginCatalog, PluginCommandInput, PluginCommandResult, PluginConfig, PluginWizardInterviewInput, PluginWizardInterviewResult, PluginWizardSpec } from '@shared/plugins'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGoalActions, useGoals } from './GoalsContext'
 import {
@@ -180,6 +180,48 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
         return result
     }, [refreshPluginBlocks, refreshPlugins])
 
+    const interviewPluginWizard = useCallback(async (
+        input: PluginWizardInterviewInput
+    ): Promise<PluginWizardInterviewResult> => {
+        try {
+            const result = await window.context.interviewPluginWizard(input)
+            setError(result.status === 'error' ? result.error : null)
+            return result
+        } catch (interviewError) {
+            const message = interviewError instanceof Error
+                ? interviewError.message
+                : 'The AI plugin interview failed.'
+            setError(message)
+            return { status: 'error', error: message }
+        }
+    }, [])
+
+    const createGeneratedPlugin = useCallback(async (
+        spec: PluginWizardSpec,
+        revision?: string
+    ): Promise<{ error?: string; pluginId?: string; folderName?: string }> => {
+        try {
+            const result = await window.context.createGeneratedPlugin({
+                spec,
+                confirmed: true,
+                ...(revision ? { revision } : {})
+            })
+            applyCatalog(result.catalog)
+            setError(result.error ?? null)
+            return {
+                ...(result.error ? { error: result.error } : {}),
+                ...(result.pluginId ? { pluginId: result.pluginId } : {}),
+                ...(result.folderName ? { folderName: result.folderName } : {})
+            }
+        } catch (creationError) {
+            const message = creationError instanceof Error
+                ? creationError.message
+                : 'The generated plugin could not be installed.'
+            setError(message)
+            return { error: message }
+        }
+    }, [applyCatalog])
+
     const stateValue: PluginsState = useMemo(() => ({
         plugins,
         pluginsPath,
@@ -195,8 +237,10 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
         removePlugin,
         openPluginsFolder,
         refreshPluginBlocks,
-        runPluginCommand
-    }), [refreshPlugins, setPluginEnabled, setPluginConfig, removePlugin, openPluginsFolder, refreshPluginBlocks, runPluginCommand])
+        runPluginCommand,
+        interviewPluginWizard,
+        createGeneratedPlugin
+    }), [refreshPlugins, setPluginEnabled, setPluginConfig, removePlugin, openPluginsFolder, refreshPluginBlocks, runPluginCommand, interviewPluginWizard, createGeneratedPlugin])
 
     return (
         <PluginsStateContext.Provider value={stateValue}>

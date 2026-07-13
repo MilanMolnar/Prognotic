@@ -6,6 +6,7 @@ export const autoSavingTime = 3000
 export const indexFileName = "index.json"
 export const settingsFileName = "settings.json"
 export const goalsFileName = "goals.json"
+export const calendarFileName = "calendar.json"
 export const pluginsDirectoryName = "plugins"
 export const pluginStateFileName = "plugin-state.json"
 export const pluginDataDirectoryName = "plugin-data"
@@ -27,13 +28,25 @@ export const defaultSettings: AppSettings = {
     // Main replaces this neutral cross-platform baseline with the native
     // platform default before settings reach the renderer.
     dictationMode: "whisprflow",
+    onboardingCompleted: false,
+    onboardingSkipped: false,
     llm: {
         provider: 'gemini',
         model: '',
+        pluginWizardModel: '',
         imageRecognitionModel: '',
         localBaseUrl: 'http://127.0.0.1:1234',
         polishDictation: false,
         aiBlockNameSummary: false,
+    },
+    googleCalendar: {
+        enabled: false,
+        pushEnabled: false,
+        pullEnabled: false,
+        autoSyncMinutes: 0,
+        hasOAuthClient: false,
+        isConnected: false,
+        lastSyncStatus: 'idle',
     },
     hasWhisprflowApiKey: false,
     hasGeminiApiKey: false,

@@ -1,6 +1,6 @@
 import { MDXEditor } from '@mdxeditor/editor'
 import { useMarkdownEditor } from '@renderer/hooks/useMarkdownEditor';
-import { useBlockActions } from '@renderer/context'
+import { useBlockActions, useCalendarActions } from '@renderer/context'
 import { JSX } from 'react'
 import { editorPlugins } from './editorPlugins'
 import { EditorAiToolbar } from './EditorAiToolbar'
@@ -11,12 +11,15 @@ import { EditorAiToolbar } from './EditorAiToolbar'
 export const MarkdownEditor = (): JSX.Element | null => {
   const { selectedBlock, editorKey, editorRef, handleAutoSaving, handleBlur } = useMarkdownEditor();
   const { saveBlock } = useBlockActions()
+  const { extractBlockCalendar } = useCalendarActions()
 
   if (!selectedBlock) return null
 
   const persistSelectionReplacement = (): void => {
     const content = editorRef.current?.getMarkdown()
-    if (content !== undefined) void saveBlock({ content })
+    if (content !== undefined) {
+      void saveBlock({ content }).then(() => extractBlockCalendar(selectedBlock.id))
+    }
   }
 
   return (<div className="flex h-full min-h-0 flex-col">

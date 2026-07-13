@@ -10,11 +10,13 @@ export type GoalsState = {
     goals: Goal[] | undefined
     selectedCategory: CategoryKey
     selectedPluginId: string | null
+    isCalendarSelected: boolean
 }
 
 export type GoalsActions = {
     selectCategory: (key: CategoryKey) => void
     selectPlugin: (pluginId: string | null) => void
+    selectCalendar: () => void
     createGoal: (name: string, description: string, routingHints?: string) => Promise<void>
     registerPersistedGoal: (goal: Goal) => void
     renameGoal: (id: string, name: string, description: string, routingHints?: string) => Promise<void>

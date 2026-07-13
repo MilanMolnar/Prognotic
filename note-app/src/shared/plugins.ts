@@ -268,6 +268,7 @@ export type InstalledPlugin = {
     config: PluginConfig
     ui?: PluginNoteFeedUi
     badgeCount: number
+    aiGenerated: boolean
 }
 
 export type PluginCatalog = {
@@ -278,6 +279,80 @@ export type PluginCatalog = {
 export type PluginMutationResult = {
     catalog: PluginCatalog
     error?: string
+}
+
+export type PluginWizardIcon = 'utensils' | 'leaf' | 'heart' | 'sparkles' | 'puzzle'
+
+export type PluginWizardCommandInputKind =
+    | 'none'
+    | 'text'
+    | 'blockId'
+    | 'blockId-content'
+
+export type PluginWizardCommandOutline = {
+    command: string
+    input: PluginWizardCommandInputKind
+    purpose: string
+    usesAi: boolean
+}
+
+export type PluginWizardSpec = {
+    id: string
+    folderName: string
+    name: string
+    description: string
+    sidebar: {
+        label: string
+        icon: PluginWizardIcon
+    }
+    configSchema: PluginConfigField[]
+    ui: PluginNoteFeedUi
+    commands: PluginWizardCommandOutline[]
+    ai: {
+        enabled: boolean
+        systemPrompt?: string
+        actionPrompts: { command: string; prompt: string }[]
+    }
+}
+
+export type PluginWizardAnswer = {
+    question: string
+    answer: string
+}
+
+export type PluginWizardInterviewInput = {
+    goal: string
+    answers: PluginWizardAnswer[]
+}
+
+export type PluginWizardInterviewResult =
+    | {
+        status: 'question'
+        question: string
+        guidance?: string
+    }
+    | {
+        status: 'ready_to_generate'
+        spec: PluginWizardSpec
+        summary: string[]
+        constraints: string[]
+    }
+    | {
+        status: 'error'
+        error: string
+    }
+
+export type CreateGeneratedPluginInput = {
+    spec: PluginWizardSpec
+    confirmed: boolean
+    revision?: string
+}
+
+export type CreateGeneratedPluginResult = {
+    catalog: PluginCatalog
+    error?: string
+    pluginId?: string
+    folderName?: string
 }
 
 export type PluginBlockFilter = {

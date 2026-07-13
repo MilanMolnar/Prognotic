@@ -15,7 +15,7 @@ export const CaptureModeToggle = (): JSX.Element => {
   const { updateSettings } = useSettingsActions()
 
   return (
-    <div className="no-drag flex items-center gap-0.5 rounded-md border border-zinc-400/40 p-0.5">
+    <div data-tour="capture-mode-toggle" className="no-drag flex items-center gap-0.5 rounded-md border border-zinc-400/40 p-0.5">
       {modes.map(({ key, label, title }) => (
         <button
           key={key}

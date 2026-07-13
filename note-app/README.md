@@ -21,10 +21,14 @@ npm run dev
 - Optional AI cleanup for Wispr Flow transcripts, with Retry and Use original recovery.
 - Semantic goal matching across names, descriptions, and routing hints; honest low-confidence suggestions; sidebar unvisited counters; per-goal acknowledgement; and visible classification retry status.
 - Folder-installed, manifest-driven plugins with scoped note blocks, host AI, local configuration/storage, and host-rendered views.
+- A local-first month/week/day calendar extracted from notes across the vault, with validation badges and a one-at-a-time uncertain-time resolution queue.
+- Optional two-way Google Calendar sync; imports require local validation and only verified Prognotic items can be exported.
 
 ## Settings and credentials
 
 Settings controls block-window duration, capture mode, dictation, active AI provider/model, LM Studio loopback URL, and optional dictation polishing. API keys are encrypted with Electron `safeStorage`; Settings displays only whether a key is configured.
+
+Google Calendar is off by default. Desktop OAuth client values and the refresh token are encrypted with `safeStorage`; event sync sends only verified appointment fields, never note bodies or block ids.
 
 LM Studio must be running locally. The model picker lists only loaded LLM instances, not merely downloaded models.
 
@@ -40,6 +44,7 @@ The app stores data in `~/NoteMark/`:
 | `settings.json` | Public settings |
 | `secrets.json` | Encrypted credentials |
 | `assistant-history.json` | Recent assistant conversations |
+| `calendar.json` | Calendar items, extraction state, Google mappings/tombstones, and sync token |
 | `plugins/` | Manually installed plugin folders (`plugin.json` + CommonJS entry) |
 | `plugin-state.json` | Enabled plugin ids, plugin configuration, and seed state |
 | `plugin-data/` | Size-bounded, plugin-local JSON storage |
