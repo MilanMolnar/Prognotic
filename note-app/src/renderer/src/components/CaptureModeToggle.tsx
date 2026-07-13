@@ -19,6 +19,7 @@ export const CaptureModeToggle = (): JSX.Element => {
       {modes.map(({ key, label, title }) => (
         <button
           key={key}
+          data-tour={`capture-mode-${key}`}
           type="button"
           title={title}
           onClick={() => void updateSettings({ captureMode: key })}

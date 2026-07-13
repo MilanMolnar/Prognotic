@@ -255,7 +255,7 @@ export const ChatPanel = (): JSX.Element => {
         <button type="button" title="New conversation" onClick={newConversation} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100"><LuPlus className="h-4 w-4" /></button>
       </div>
       <AssistantSelect label="Conversation" ariaLabel="Conversation" value={activeConversationId ?? ''} options={conversationOptions} onChange={selectConversation} className="mt-2" />
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
+      <div data-tour="assistant-scopes" className="mt-2 grid grid-cols-2 gap-1.5">
         <AssistantSelect label={goalIsModeLocked ? 'Goal · fixed by mode' : 'Goal'} ariaLabel="Goal scope" value={goalMode} options={scopedGoalOptions} onChange={(value) => setGoalMode(value as typeof goalMode)} disabled={isStreaming || goalIsModeLocked} />
         <AssistantSelect label={timeIsModeLocked ? 'Time · fixed by mode' : 'Time'} ariaLabel="Time interval" value={timeRange} options={timeOptions} onChange={(value) => setTimeRange(value as typeof timeRange)} disabled={isStreaming || timeIsModeLocked} />
       </div>
@@ -302,7 +302,7 @@ export const ChatPanel = (): JSX.Element => {
       </div>
       {error && <div className="mt-1 flex items-center gap-2 px-1 text-xs" role="alert"><span className="text-red-400">{error}</span>{retryPrompt && <button type="button" onClick={() => setDraft(retryPrompt)} className="rounded border border-red-400/40 px-1.5 py-0.5 text-red-300 hover:bg-red-500/10">Retry</button>}</div>}
       <form onSubmit={submit} className="mt-2 flex flex-col rounded-lg border border-zinc-400/50 bg-zinc-900/40 px-1 py-1 focus-within:border-zinc-300/60">
-        {attachedBlocks.length > 0 && <div className="flex flex-wrap gap-1 px-1 pb-0.5 pt-0.5">
+        {attachedBlocks.length > 0 && <div data-tour="assistant-context" className="flex flex-wrap gap-1 px-1 pb-0.5 pt-0.5">
           {attachedBlocks.map((block) => {
             const label = blockLabel(block, settings.llm.aiBlockNameSummary)
             return <span key={block.id} title={label} className="flex max-w-full items-center gap-1 rounded-md border border-yellow-500/40 bg-yellow-500/10 py-0.5 pl-1.5 pr-0.5 text-[10px] text-yellow-300">
@@ -326,7 +326,7 @@ export const ChatPanel = (): JSX.Element => {
             : <button type="submit" title="Send" disabled={!draft.trim() || !customDatesValid || !conversationModel} className="rounded p-1.5 text-zinc-300 hover:bg-zinc-600/50 disabled:opacity-40"><LuSend className="h-4 w-4" /></button>}
         </div>
       </form>
-      <div className="mt-2 grid grid-cols-2 items-end gap-1.5">
+      <div data-tour="assistant-model-mode" className="mt-2 grid grid-cols-2 items-end gap-1.5">
         <AssistantSelect label="Model" ariaLabel="Conversation model" value={selectedModelValue} options={modelOptions} onChange={handleModelChange} disabled={isStreaming || isLoadingModels && modelOptions.length === 1} placement="up" maxVisibleOptions={6} searchableThreshold={10} searchPlaceholder="Filter models..." />
         <AssistantSelect label="Mode" ariaLabel="Assistant mode" value={assistantMode} options={modeOptions} onChange={(value) => setAssistantMode(value as AssistantMode)} disabled={isStreaming} placement="up" />
       </div>

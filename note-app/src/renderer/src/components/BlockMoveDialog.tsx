@@ -20,6 +20,7 @@ export const BlockMoveDialog = ({
 }: BlockMoveDialogProps): JSX.Element => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={() => { if (!isMoving) onClose() }}>
     <div
+      data-tour="block-move-dialog"
       role="dialog"
       aria-modal="true"
       aria-labelledby="block-move-dialog-title"
@@ -45,6 +46,7 @@ export const BlockMoveDialog = ({
       </p>
       <div className="mt-4 flex justify-end gap-2">
         <button
+          data-tour="block-copy-only"
           type="button"
           disabled={isMoving}
           onClick={onCopyOnly}
@@ -53,6 +55,7 @@ export const BlockMoveDialog = ({
           Copy only
         </button>
         <button
+          data-tour="block-move"
           type="button"
           disabled={isMoving}
           onClick={onMove}

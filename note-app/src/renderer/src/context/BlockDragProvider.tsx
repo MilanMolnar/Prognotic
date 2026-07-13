@@ -1,5 +1,6 @@
 import { flyLabelToCategoryRow } from '@renderer/components/categoryFlight'
 import { showBlockToast } from '@renderer/components/blockToast'
+import { dispatchOnboardingEvent, onboardingEvents } from '@renderer/onboarding/events'
 import { researchCategory } from '@shared/constants'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAssistantActions } from './AssistantContext'
@@ -90,6 +91,7 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
 
     if (drag.target.type === 'chat') {
       attachBlock(block.id)
+      dispatchOnboardingEvent(onboardingEvents.blockAttachedToAssistant, { blockId: block.id })
       return
     }
 
@@ -115,6 +117,9 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
         targetLabel: categoryLabel(targetCategoryId),
         wasAlreadyInTarget
       })
+      if (targetCategoryId === null) {
+        dispatchOnboardingEvent(onboardingEvents.blockDroppedToQuickNotes, { blockId: block.id })
+      }
     } catch {
       showBlockToast('Could not copy this note to the selected goal.')
     }
@@ -212,7 +217,12 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
     setIsMoving(true)
     try {
       const moved = await updateBlockCategories(movePrompt.blockId, [movePrompt.targetCategoryId])
-      if (moved) setMovePrompt(null)
+      if (moved) {
+        dispatchOnboardingEvent(onboardingEvents.blockMoveChoiceCompleted, {
+          blockId: movePrompt.blockId
+        })
+        setMovePrompt(null)
+      }
       else showBlockToast('Could not move this note.')
     } catch {
       showBlockToast('Could not move this note.')

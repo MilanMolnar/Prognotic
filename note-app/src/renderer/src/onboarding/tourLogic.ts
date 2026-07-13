@@ -21,10 +21,20 @@ export const resolveTourConnectionState = (
   imageRecognitionReady: selectedProvider === llm.provider && isImageRecognitionReady(llm)
 })
 
+const isTourCapture = (block: TourRuntimeContext['blocks'][number], tourStartedAt: number): boolean =>
+  (block.createdAt >= tourStartedAt || block.updatedAt >= tourStartedAt) &&
+  block.excerpt.trim().length > 0
+
+export const findTourSampleBlock = (context: TourRuntimeContext): TourRuntimeContext['blocks'][number] | undefined =>
+  context.blocks.reduce<TourRuntimeContext['blocks'][number] | undefined>((latest, block) => {
+    if (!isTourCapture(block, context.tourStartedAt)) return latest
+    if (!latest || block.updatedAt > latest.updatedAt) return block
+    return latest
+  }, undefined)
+
 export const hasTourSampleBlock = (context: TourRuntimeContext): boolean =>
   context.blocks.some((block) =>
-    (block.createdAt >= context.tourStartedAt || block.updatedAt >= context.tourStartedAt) &&
-    block.excerpt.trim().length > 0 &&
+    isTourCapture(block, context.tourStartedAt) &&
     (context.workGoalId === null || block.categories.includes(context.workGoalId))
   )
 

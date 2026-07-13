@@ -80,7 +80,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+      <div data-tour="plugin-manager" className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         <div className="flex items-start gap-3 border-b border-white/10 p-4">
           <div className="min-w-0 flex-1">
             <h2 className="font-semibold text-zinc-100">Plugins</h2>
@@ -89,12 +89,12 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
           <button type="button" title="Create plugin with AI" onClick={() => setIsWizardOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-violet-500/40 px-2.5 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10">
             <LuSparkles className="h-3.5 w-3.5" aria-hidden /> Create with AI
           </button>
-          <button type="button" title="Close plugin manager" onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100">
+          <button data-tour="plugin-close" type="button" title="Close plugin manager" onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100">
             <LuX className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="border-b border-white/10 px-4 py-3">
+        <div data-tour="plugin-browse" className="border-b border-white/10 px-4 py-3">
           <div className="flex items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded bg-zinc-950 px-2 py-1.5 text-xs text-zinc-400" title={pluginsPath}>{pluginsPath || 'Loading plugins folder...'}</code>
             <button type="button" title="Copy path" disabled={!pluginsPath} onClick={() => { void copyPath() }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuClipboard className="h-4 w-4" /></button>
@@ -104,14 +104,18 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
           {displayedStatus && <p className={cn('mt-2 text-xs', displayedStatusIsError ? 'text-red-400' : 'text-zinc-400')} role="status">{displayedStatus}</p>}
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div data-tour="plugin-list" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           {plugins === undefined && <p className="text-sm text-zinc-500">Discovering plugins...</p>}
           {plugins?.length === 0 && <p className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">No plugin folders found.</p>}
           {plugins?.map((plugin) => {
             const canToggle = plugin.id !== null && (plugin.valid || plugin.enabled)
             const isConfiguring = plugin.id !== null && configuringId === plugin.id
             return (
-              <section key={plugin.folderName} className={cn('rounded-lg border p-3', plugin.valid ? 'border-white/10' : 'border-red-500/30 bg-red-500/5')}>
+              <section
+                key={plugin.folderName}
+                data-tour={plugin.id === 'dietary' ? 'plugin-dietary' : undefined}
+                className={cn('rounded-lg border p-3', plugin.valid ? 'border-white/10' : 'border-red-500/30 bg-red-500/5')}
+              >
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -130,6 +134,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
                   </div>
                   <label className={cn('flex shrink-0 items-center gap-2 text-xs', canToggle ? 'text-zinc-300' : 'text-zinc-600')}>
                     <input
+                      data-tour={plugin.id === 'dietary' ? 'plugin-dietary-enabled' : undefined}
                       type="checkbox"
                       checked={plugin.enabled}
                       disabled={!canToggle || busyKey !== null}
@@ -148,6 +153,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
                     <button type="button" onClick={() => isConfiguring ? setConfiguringId(null) : beginConfigure(plugin.id as string, plugin.config)} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800">{isConfiguring ? 'Close configuration' : 'Configure'}</button>
                   )}
                   <button
+                    data-tour={plugin.id === 'dietary' ? 'plugin-dietary-delete' : undefined}
                     type="button"
                     disabled={busyKey !== null}
                     onClick={() => {

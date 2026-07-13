@@ -1,4 +1,5 @@
 import { useBlockDrag, useBlockDragActions } from '@renderer/context'
+import { dispatchOnboardingEvent, onboardingEvents } from '@renderer/onboarding/events'
 import { JSX } from 'react'
 import { LuGripVertical } from 'react-icons/lu'
 import { BlockMoveDialog } from './BlockMoveDialog'
@@ -6,6 +7,12 @@ import { BlockMoveDialog } from './BlockMoveDialog'
 export const BlockDragOverlay = (): JSX.Element => {
   const { activeDrag, movePrompt, isMoving } = useBlockDrag()
   const { dismissMovePrompt, moveToTarget } = useBlockDragActions()
+  const keepCopy = (): void => {
+    if (!movePrompt) return
+    const blockId = movePrompt.blockId
+    dismissMovePrompt()
+    dispatchOnboardingEvent(onboardingEvents.blockMoveChoiceCompleted, { blockId })
+  }
   const badgeStyle = activeDrag ? {
     left: activeDrag.x + (activeDrag.x > window.innerWidth - 220 ? -12 : 12),
     top: activeDrag.y + (activeDrag.y > window.innerHeight - 60 ? -12 : 12),
@@ -25,9 +32,9 @@ export const BlockDragOverlay = (): JSX.Element => {
       targetLabel={movePrompt.targetLabel}
       wasAlreadyInTarget={movePrompt.wasAlreadyInTarget}
       isMoving={isMoving}
-      onCopyOnly={dismissMovePrompt}
+      onCopyOnly={keepCopy}
       onMove={() => { void moveToTarget() }}
-      onClose={dismissMovePrompt}
+      onClose={keepCopy}
     />}
   </>
 }

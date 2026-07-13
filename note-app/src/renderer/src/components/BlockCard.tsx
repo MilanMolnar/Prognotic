@@ -1,6 +1,7 @@
 import { AiActionDialog, BlockContextMenu } from '@/components'
 import { useAssistant, useAssistantActions, useBlockActions, useBlockDragActions, useBlocks, useGoals, useSettings } from '@renderer/context'
 import { blockLabel, cn, formatDateFromMs } from '@renderer/utils'
+import { dispatchOnboardingEvent, onboardingEvents } from '@renderer/onboarding/events'
 import { researchCategory } from '@shared/constants'
 import { isBlockUnvisitedInGoal } from '@shared/goalPresence'
 import { BlockMeta, GoalPresenceSource } from '@shared/models'
@@ -82,6 +83,7 @@ export const BlockCard = ({
   const handleContextMenu = (event: MouseEvent): void => {
     event.preventDefault()
     setMenuPosition({ x: event.clientX, y: event.clientY })
+    dispatchOnboardingEvent(onboardingEvents.blockContextMenuOpened, { blockId: block.id })
   }
 
   const applySuggestedGoal = async (goalId: string, goalName: string, event: MouseEvent<HTMLButtonElement>): Promise<void> => {
@@ -166,7 +168,7 @@ export const BlockCard = ({
     <>
     {/* A regular wrapper keeps the drag handle centered independently of
         the fieldset's special legend layout. */}
-    <div className="group relative min-w-0">
+    <div data-block-id={block.id} className="group relative min-w-0">
     {/* A fieldset so the legend timestamp sits in a real gap of the border
         line — no background masking needed over the translucent theme. */}
     <fieldset
@@ -275,6 +277,7 @@ export const BlockCard = ({
       </span>}
     </fieldset>
     <button
+      data-tour="block-drag-handle"
       type="button"
       draggable={false}
       title="Hold and drag note"

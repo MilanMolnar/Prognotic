@@ -1,4 +1,4 @@
-import { useCalendarActions, useSettings, useSettingsActions } from '@renderer/context'
+import { useCalendarActions, useOnboardingActions, useSettings, useSettingsActions } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { isImageRecognitionSelectionVerified, isLlmSelectionVerified } from '@shared/llmSettings'
 import { DictationMode, LlmProvider } from '@shared/models'
@@ -157,6 +157,7 @@ const keyStatus = (provider: LlmProvider, settings: ReturnType<typeof useSetting
 export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
   const { settings } = useSettings()
   const { updateSettings } = useSettingsActions()
+  const { startTour } = useOnboardingActions()
   const { configureGoogle, connectGoogle, disconnectGoogle, syncGoogleNow } = useCalendarActions()
   const dictationOptions = dictationOptionsForPlatform(window.context.platform)
   const [blockWindowMinutes, setBlockWindowMinutes] = useState(String(settings.blockWindowMinutes))
@@ -492,7 +493,7 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
           <SettingInfoButton settingName={settingHelp.testConnection.title} onOpen={() => setActiveHelp(settingHelp.testConnection)} />
           {status && <span className={cn('text-xs', status.tone === 'success' ? 'text-green-400' : status.tone === 'error' ? 'text-red-400' : 'text-zinc-400')} aria-live="polite">{status.message}</span>}
         </div>
-        <div className="mt-4 border-t border-white/10 pt-3">
+        <div data-tour="settings-plugin-model" className="mt-4 border-t border-white/10 pt-3">
           <div className="flex items-center gap-1 text-sm text-zinc-300">
             <label htmlFor="plugin-wizard-model">AI Plugin Wizard model</label>
             <SettingInfoButton settingName={settingHelp.pluginWizardModel.title} onOpen={() => setActiveHelp(settingHelp.pluginWizardModel)} />
@@ -509,7 +510,7 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
           </select>
           <p className="mt-1 text-xs text-zinc-500">Uses the current provider and credential. Active model is the default.</p>
         </div>
-        <div className="mt-4 border-t border-white/10 pt-3">
+        <div data-tour="settings-image-model" className="mt-4 border-t border-white/10 pt-3">
           <div className={cn('flex items-center gap-1 text-sm', isImageRecognitionAvailableForDraft ? 'text-zinc-300' : 'text-zinc-500')}>
             <label htmlFor="image-recognition-model">Image recognition model</label>
             <SettingInfoButton settingName={settingHelp.imageRecognitionModel.title} onOpen={() => setActiveHelp(settingHelp.imageRecognitionModel)} />
@@ -634,6 +635,16 @@ export const SettingsModal = ({ onClose }: SettingsModalProps): JSX.Element => {
         <p className="mt-2 text-xs text-zinc-500">Browse folders installed in your local vault, enable them, and edit their configuration.</p>
         <button data-tour="settings-plugins" type="button" onClick={() => setIsPluginManagerOpen(true)} className="mt-2 rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50">Manage plugins</button>
       </fieldset>
+      <div className="mt-6 border-t border-white/10 pt-4">
+        <button
+          type="button"
+          onClick={() => { startTour(); onClose() }}
+          className="rounded-md border border-zinc-400/50 px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-600/50"
+        >
+          Restart tour
+        </button>
+        <p className="mt-1 text-xs text-zinc-500">Replay the onboarding walkthrough from the beginning.</p>
+      </div>
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-md border border-zinc-400/50 px-2 py-1 text-sm hover:bg-zinc-600/50">Cancel</button>
         <button data-tour="settings-save" type="button" onClick={() => void handleSave()} className="rounded-md border border-yellow-500/50 px-2 py-1 text-sm hover:bg-yellow-500/20">Save</button>

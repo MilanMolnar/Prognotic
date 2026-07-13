@@ -1,4 +1,5 @@
 import { useBlockActions, useSettings } from '@renderer/context'
+import { dispatchOnboardingEvent, onboardingEvents } from '@renderer/onboarding/events'
 import { blockLabel } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { BlockMeta } from '@shared/models'
@@ -93,16 +94,29 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
     }
   }, [onClose])
 
-  const handleAction = (action: QuickAction) => (): void => {
+  const handleAction = async (action: QuickAction): Promise<void> => {
     if (action.id === 'send-to-research') {
       if (block.categories.includes(researchCategory)) {
         showBlockToast('Already in Research')
+        dispatchOnboardingEvent(onboardingEvents.blockSentToResearch, { blockId: block.id })
       } else {
         // Research joins the block's categories (multi-goal — the single
         // .md file is untouched), with a flight to the sidebar row showing
         // where the block now also lives.
-        void updateBlockCategories(block.id, [...block.categories, researchCategory])
-        flyLabelToCategoryRow(blockLabel(block, settings.llm.aiBlockNameSummary), position, researchCategory)
+        try {
+          const updated = await updateBlockCategories(
+            block.id,
+            [...block.categories, researchCategory]
+          )
+          if (updated) {
+            flyLabelToCategoryRow(blockLabel(block, settings.llm.aiBlockNameSummary), position, researchCategory)
+            dispatchOnboardingEvent(onboardingEvents.blockSentToResearch, { blockId: block.id })
+          } else {
+            showBlockToast('Could not send this note to Research.')
+          }
+        } catch {
+          showBlockToast('Could not send this note to Research.')
+        }
       }
     } else {
       onAiAction(action.id as 'translate' | 'explain')
@@ -119,14 +133,16 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
   return createPortal(
     <div
       ref={menuRef}
+      data-tour="block-context-menu"
       style={{ left, top }}
       className="fixed z-50 w-44 rounded-md border border-zinc-700 bg-zinc-900/95 py-1 shadow-xl"
     >
       {defaultQuickActions.map((action) => (
         <button
           key={action.id}
+          data-tour={action.id === 'send-to-research' ? 'block-send-to-research' : undefined}
           type="button"
-          onClick={handleAction(action)}
+          onClick={() => { void handleAction(action) }}
           className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 transition-colors duration-75 hover:bg-yellow-500/10 hover:text-yellow-500"
         >
           {action.label}

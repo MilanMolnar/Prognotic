@@ -97,17 +97,19 @@ type SystemButtonProps = {
   onClick: () => void
   itemRef: (element: HTMLElement | null) => void
   categoryRowId: string
+  tourId?: string
   leading: ReactNode
   trailing?: ReactNode
   blockDropState?: 'available' | 'active'
 }
 
-const SystemItem = ({ label, onClick, itemRef, categoryRowId, leading, trailing, blockDropState }: SystemButtonProps): JSX.Element => (
+const SystemItem = ({ label, onClick, itemRef, categoryRowId, tourId, leading, trailing, blockDropState }: SystemButtonProps): JSX.Element => (
   <SelectableItem
     label={label}
     onClick={onClick}
     itemRef={itemRef}
     categoryRowId={categoryRowId}
+    tourId={tourId}
     leading={leading}
     trailing={trailing}
     blockDropState={blockDropState}
@@ -423,6 +425,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             label="Quick Note"
             itemRef={registerItemRef(null)}
             categoryRowId={categoryId(null)}
+            tourId="quick-notes-goal"
             blockDropState={blockDropStateFor(categoryId(null))}
             onClick={handleCategorySelect(null)}
             leading={<LuStickyNote className={systemGoalIconClass} aria-hidden />}
@@ -431,6 +434,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             label="Research"
             itemRef={registerItemRef(researchCategory)}
             categoryRowId={categoryId(researchCategory)}
+            tourId="research-goal"
             blockDropState={blockDropStateFor(categoryId(researchCategory))}
             onClick={handleCategorySelect(researchCategory)}
             leading={<LuBookOpen className={systemGoalIconClass} aria-hidden />}
