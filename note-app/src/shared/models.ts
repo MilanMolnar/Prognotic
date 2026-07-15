@@ -83,6 +83,25 @@ export type VerifiedLlmConnection = {
     model: string
 }
 
+export type LlmUsageResetInterval = 'forever' | 'monthly' | 'yearly' | 'days'
+
+export type LlmUsageThresholds = {
+    yellow: number
+    red: number
+    critical: number
+}
+
+export type LlmUsageBudgetSettings = {
+    enabled: boolean
+    limitUsd: number
+    resetInterval: LlmUsageResetInterval
+    resetDays: number
+    thresholds: LlmUsageThresholds
+    // Anchor for rolling custom-day windows. Calendar month/year periods use
+    // their local calendar boundaries instead.
+    periodStartedAt: number
+}
+
 export type LlmSettings = {
     provider: LlmProvider
     model: string
@@ -91,6 +110,7 @@ export type LlmSettings = {
     localBaseUrl: string
     polishDictation: boolean
     aiBlockNameSummary: boolean
+    usageBudget: LlmUsageBudgetSettings
     verifiedConnection?: VerifiedLlmConnection
     verifiedImageRecognitionConnection?: VerifiedLlmConnection
 }

@@ -2,6 +2,7 @@ import { AppSettings, AssistantConversation, AssistantGoalMode, AssistantMode, B
 import type { GlossaryValidationError } from './glossary'
 import { CreateGeneratedPluginInput, CreateGeneratedPluginResult, OpenPluginsFolderResult, PluginCatalog, PluginCommandInput, PluginCommandResult, PluginConfig, PluginHostCallResult, PluginHostRequest, PluginMutationResult, PluginWizardInterviewInput, PluginWizardInterviewResult } from './plugins'
 import type { DocumentFormat, DocumentSummaryOptions, SupportedDocumentExtension } from './documents'
+import type { LlmUsageSummary } from './llmUsage'
 import type { SupportedImageMimeType } from './vision'
 
 export type GetBlocks = () => Promise<BlockMeta[]>
@@ -103,6 +104,8 @@ export type LlmModel = { id: string; label: string; contextWindow?: number; visi
 export type LlmModelsResult = { models: LlmModel[]; error?: never } | { models?: never; error: string }
 export type GetLlmModels = (provider: LlmProvider) => Promise<LlmModelsResult>
 export type TestLlmConnection = () => Promise<{ ok: boolean; error?: string }>
+// All-time locally estimated AI usage recorded on this device.
+export type GetLlmUsageSummary = () => Promise<LlmUsageSummary>
 export type ImageRecognitionInput = {
     imageBytes: ArrayBuffer
     mimeType: SupportedImageMimeType

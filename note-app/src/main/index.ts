@@ -7,8 +7,9 @@ import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, applyNewGoalR
 import { toggleMacDictation } from './dictation/macos'
 import { toggleWindowsDictation } from './dictation/windows'
 import { transcribeAudio } from './dictation/wisprflow'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGlossaryEntry, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGlossaryEntry, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGlossaryEntries, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OpenPluginsFolder, ParseDocument as ParseDocumentIpc, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument as SummarizeDocumentIpc, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, UpdateGlossaryEntry, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGlossaryEntry, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGlossaryEntry, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGlossaryEntries, GetGoals, GetLlmModels, GetLlmUsageSummary, GetPlugins, GetSettings, InterviewPluginWizard, OpenPluginsFolder, ParseDocument as ParseDocumentIpc, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument as SummarizeDocumentIpc, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, UpdateGlossaryEntry, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
 import { classifyBlock, listModels, polishTranscript, recognizeImage, runInlineAction, streamAssistant, summarizeBlockName, summarizeDocument, testConnection, testImageRecognitionConnection } from './llm/router'
+import { getLlmUsageSummary } from './llm/usageStore'
 import { callPluginHost, ensurePluginsDirectory, initializePlugins, refreshPluginCatalog, removePlugin, runPluginCommand, setPluginConfig, setPluginEnabled } from './plugins'
 import { createGeneratedPlugin, interviewPluginWizard } from './plugins/wizard'
 import { parseDocumentLocally } from './documents'
@@ -177,6 +178,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('getLlmModels', async (_, ...args: Parameters<GetLlmModels>) => {
     try { return { models: await listModels(...args) } } catch (error) { return { error: error instanceof Error ? error.message : 'Could not load models.' } }
   })
+  ipcMain.handle('getLlmUsageSummary', async (): Promise<Awaited<ReturnType<GetLlmUsageSummary>>> =>
+    getLlmUsageSummary((await getSettings()).llm.usageBudget))
   ipcMain.handle('testLlmConnection', async (): Promise<Awaited<ReturnType<TestLlmConnection>>> => {
     try {
       const verifiedConnection = await testConnection()

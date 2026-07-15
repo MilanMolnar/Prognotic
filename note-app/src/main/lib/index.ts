@@ -3,6 +3,7 @@ import { clampGlossaryKeyMaxLength } from '@shared/glossary'
 import { reconcileUserGoalPresence, setGoalPresence, userGoalPresenceForCategories } from '@shared/goalPresence'
 import { AppSettings, AssistantConversation, BlockMeta, Goal, LlmCredentialName } from "@shared/models"
 import { normalizeUiLocale } from '@shared/locales'
+import { maxLlmUsageResetDays, normalizeLlmUsageThresholds } from '@shared/llmUsage'
 import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
 import { dialog, safeStorage } from "electron"
@@ -591,6 +592,33 @@ const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
             : defaultSettings.llm.localBaseUrl,
         polishDictation: settings.llm?.polishDictation === true,
         aiBlockNameSummary: settings.llm?.aiBlockNameSummary === true,
+        usageBudget: {
+            enabled: typeof settings.llm?.usageBudget?.enabled === 'boolean'
+                ? settings.llm.usageBudget.enabled
+                : defaultSettings.llm.usageBudget.enabled,
+            limitUsd: typeof settings.llm?.usageBudget?.limitUsd === 'number' &&
+                Number.isFinite(settings.llm.usageBudget.limitUsd)
+                ? Math.max(0, Math.min(1_000_000, Math.round(settings.llm.usageBudget.limitUsd * 100) / 100))
+                : defaultSettings.llm.usageBudget.limitUsd,
+            resetInterval: settings.llm?.usageBudget?.resetInterval === 'forever' ||
+                settings.llm?.usageBudget?.resetInterval === 'yearly' ||
+                settings.llm?.usageBudget?.resetInterval === 'days'
+                ? settings.llm.usageBudget.resetInterval
+                : 'monthly',
+            resetDays: typeof settings.llm?.usageBudget?.resetDays === 'number' &&
+                Number.isFinite(settings.llm.usageBudget.resetDays)
+                ? Math.max(1, Math.min(maxLlmUsageResetDays, Math.round(settings.llm.usageBudget.resetDays)))
+                : defaultSettings.llm.usageBudget.resetDays,
+            // Invalid or unordered persisted thresholds fall back as a set,
+            // preserving yellow < red < critical within 0–100.
+            thresholds: normalizeLlmUsageThresholds(settings.llm?.usageBudget?.thresholds),
+            periodStartedAt: typeof settings.llm?.usageBudget?.periodStartedAt === 'number' &&
+                Number.isFinite(settings.llm.usageBudget.periodStartedAt) &&
+                settings.llm.usageBudget.periodStartedAt > 0 &&
+                settings.llm.usageBudget.periodStartedAt <= Date.now()
+                ? Math.round(settings.llm.usageBudget.periodStartedAt)
+                : Date.now(),
+        },
         verifiedConnection: normalizeVerifiedLlmConnection(settings.llm?.verifiedConnection),
         verifiedImageRecognitionConnection: normalizeVerifiedLlmConnection(
             settings.llm?.verifiedImageRecognitionConnection
@@ -766,7 +794,18 @@ export const setSettings: SetSettings = async (patch) => {
     const merged = clampSettings({
         ...current,
         ...patch,
-        llm: { ...current.llm, ...patch.llm },
+        llm: {
+            ...current.llm,
+            ...patch.llm,
+            usageBudget: {
+                ...current.llm.usageBudget,
+                ...patch.llm?.usageBudget,
+                thresholds: {
+                    ...current.llm.usageBudget.thresholds,
+                    ...patch.llm?.usageBudget?.thresholds,
+                },
+            },
+        },
         googleCalendar: { ...current.googleCalendar, ...patch.googleCalendar }
     })
     await writeJsonAtomic(getSettingsPath(), merged)

@@ -1,4 +1,4 @@
-import { AppSettings, DictationMode } from "./models"
+import { AppSettings, DictationMode, LlmUsageBudgetSettings, LlmUsageThresholds } from "./models"
 
 export const appDirectory = "NoteMark"
 export const fileEncoding = "utf8"
@@ -8,6 +8,7 @@ export const settingsFileName = "settings.json"
 export const goalsFileName = "goals.json"
 export const calendarFileName = "calendar.json"
 export const glossaryFileName = "glossary.json"
+export const llmUsageFileName = "llm-usage.json"
 export const pluginsDirectoryName = "plugins"
 export const pluginStateFileName = "plugin-state.json"
 export const pluginDataDirectoryName = "plugin-data"
@@ -22,6 +23,21 @@ export const minGlossaryKeyLengthLimit = 50
 export const maxGlossaryKeyLengthLimit = 300
 // Storage safety only — the glossary UI imposes no explanation limit.
 export const glossaryExplanationMaxLength = 100_000
+export const defaultLlmUsageThresholds: LlmUsageThresholds = {
+    yellow: 50,
+    red: 75,
+    critical: 90,
+}
+export const defaultLlmUsageBudget: LlmUsageBudgetSettings = {
+    enabled: true,
+    limitUsd: 5,
+    resetInterval: 'monthly',
+    resetDays: 14,
+    thresholds: defaultLlmUsageThresholds,
+    // Main replaces this neutral value with the first validated settings-read
+    // time. It is only used when the custom-day interval is selected.
+    periodStartedAt: 0,
+}
 export const defaultDictationModeForPlatform = (platform: NodeJS.Platform): DictationMode => {
     if (platform === 'win32') return 'windows'
     if (platform === 'darwin') return 'macos'
@@ -47,6 +63,10 @@ export const defaultSettings: AppSettings = {
         localBaseUrl: 'http://127.0.0.1:1234',
         polishDictation: false,
         aiBlockNameSummary: false,
+        usageBudget: {
+            ...defaultLlmUsageBudget,
+            thresholds: { ...defaultLlmUsageThresholds },
+        },
     },
     googleCalendar: {
         enabled: false,

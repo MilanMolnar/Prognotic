@@ -5,7 +5,9 @@ import { researchCategory } from '@shared/constants'
 import { getBlocks, getCredential, getGoals, getSettings, readBlock, setBlockAiLabel, setBlockRouting } from '@/lib'
 import { isImageRecognitionSelectionVerified, isLlmSelectionVerified, resolvePluginWizardModel } from '@shared/llmSettings'
 import { hasSupportedImageSignature, maxImageRecognitionBytes, supportedImageMimeTypes, SupportedImageMimeType } from '@shared/vision'
+import { LlmTokenUsage } from '@shared/llmUsage'
 import { blockNameSystemPrompt, normalizeBlockNameSummary } from './blockName'
+import { recordLlmUsage } from './usageStore'
 import { parseRoutingClassification } from './classification'
 import { rankNoteCandidates } from './noteRanking'
 import { routingSystemPrompt } from './routingPrompt'
@@ -35,6 +37,12 @@ type Adapter = {
     recognizeImage: (model: string, request: ImageRequest) => Promise<string>
 }
 
+// Local accounting only — recordLlmUsage never throws into the AI call.
+const trackUsage = (provider: LlmProvider, model: string, usage: LlmTokenUsage | null): void => {
+    if (!usage) return
+    void recordLlmUsage(provider, model, usage)
+}
+
 const errorFrom = async (response: Response): Promise<Error> => {
     const body = await response.json().catch(() => null) as { error?: { message?: string } | string; message?: string } | null
     const message = typeof body?.error === 'string' ? body.error : body?.error?.message ?? body?.message
@@ -42,7 +50,14 @@ const errorFrom = async (response: Response): Promise<Error> => {
     return new Error(message ? `AI request failed: ${message}` : `AI request failed (HTTP ${response.status}).`)
 }
 
+type OpenAiUsagePayload = { prompt_tokens?: number; completion_tokens?: number }
+
+const openAiUsage = (usage: OpenAiUsagePayload | null | undefined): LlmTokenUsage | null => usage
+    ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 }
+    : null
+
 const openAiCompatible = (
+    provider: LlmProvider,
     baseUrl: string,
     token: string,
     outputTokenField: 'max_tokens' | 'max_completion_tokens' = 'max_tokens'
@@ -61,15 +76,20 @@ const openAiCompatible = (
                 model,
                 messages,
                 stream: true,
+                // The final stream chunk then carries real token counts.
+                stream_options: { include_usage: true },
                 ...(maxTokens ? { [outputTokenField]: maxTokens } : {})
             })
         })
         if (!response.ok) throw await errorFrom(response)
+        let usage: LlmTokenUsage | null = null
         await readSse(response, signal, (data) => {
-            const payload = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] }
+            const payload = JSON.parse(data) as { choices?: { delta?: { content?: string } }[]; usage?: OpenAiUsagePayload | null }
+            if (payload.usage) usage = openAiUsage(payload.usage)
             const token = payload.choices?.[0]?.delta?.content
             if (token) onToken(token)
         })
+        trackUsage(provider, model, usage)
     },
     recognizeImage: async (model, { imageBase64, mimeType, prompt, signal }) => {
         const response = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -91,13 +111,25 @@ const openAiCompatible = (
         if (!response.ok) throw await errorFrom(response)
         const payload = await response.json() as {
             choices?: { message?: { content?: string | { type?: string; text?: string }[] } }[]
+            usage?: OpenAiUsagePayload | null
         }
+        trackUsage(provider, model, openAiUsage(payload.usage))
         const content = payload.choices?.[0]?.message?.content
         return (typeof content === 'string'
             ? content
             : content?.map((part) => part.text ?? '').join('') ?? '').trim()
     }
 })
+
+type GeminiUsagePayload = { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }
+
+const geminiUsage = (usage: GeminiUsagePayload | null | undefined): LlmTokenUsage | null => usage
+    ? {
+        inputTokens: usage.promptTokenCount ?? 0,
+        // Thinking tokens are billed as output alongside candidate tokens.
+        outputTokens: (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0)
+    }
+    : null
 
 const gemini = async (): Promise<Adapter> => {
     const key = await getCredential('gemini')
@@ -124,11 +156,15 @@ const gemini = async (): Promise<Adapter> => {
                 })
             })
             if (!response.ok) throw await errorFrom(response)
+            let usage: LlmTokenUsage | null = null
             await readSse(response, signal, (data) => {
-                const payload = JSON.parse(data) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+                const payload = JSON.parse(data) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: GeminiUsagePayload }
+                // usageMetadata is cumulative; the last chunk holds final counts.
+                if (payload.usageMetadata) usage = geminiUsage(payload.usageMetadata)
                 const token = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('')
                 if (token) onToken(token)
             })
+            trackUsage('gemini', model, usage)
         },
         recognizeImage: async (model, { imageBase64, mimeType, prompt, signal }) => {
             const response = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
@@ -145,11 +181,18 @@ const gemini = async (): Promise<Adapter> => {
                 })
             })
             if (!response.ok) throw await errorFrom(response)
-            const payload = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+            const payload = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: GeminiUsagePayload }
+            trackUsage('gemini', model, geminiUsage(payload.usageMetadata))
             return (payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '').trim()
         }
     }
 }
+
+type AnthropicUsagePayload = { input_tokens?: number; output_tokens?: number }
+
+const anthropicUsage = (usage: AnthropicUsagePayload | null | undefined): LlmTokenUsage | null => usage
+    ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 }
+    : null
 
 const anthropic = async (): Promise<Adapter> => {
     const key = await getCredential('anthropic')
@@ -171,10 +214,26 @@ const anthropic = async (): Promise<Adapter> => {
                 body: JSON.stringify({ model, max_tokens: maxTokens ?? 2048, stream: true, ...(system ? { system } : {}), messages: messages.filter((message) => message.role !== 'system') })
             })
             if (!response.ok) throw await errorFrom(response)
+            let usage: LlmTokenUsage | null = null
             await readSse(response, signal, (data) => {
-                const payload = JSON.parse(data) as { type?: string; delta?: { type?: string; text?: string } }
+                const payload = JSON.parse(data) as {
+                    type?: string
+                    delta?: { type?: string; text?: string }
+                    message?: { usage?: AnthropicUsagePayload }
+                    usage?: AnthropicUsagePayload
+                }
+                // message_start carries input tokens; message_delta carries the
+                // final cumulative output token count.
+                if (payload.type === 'message_start' && payload.message?.usage) usage = anthropicUsage(payload.message.usage)
+                if (payload.type === 'message_delta' && payload.usage) {
+                    usage = {
+                        inputTokens: payload.usage.input_tokens ?? usage?.inputTokens ?? 0,
+                        outputTokens: payload.usage.output_tokens ?? usage?.outputTokens ?? 0
+                    }
+                }
                 if (payload.type === 'content_block_delta' && payload.delta?.type === 'text_delta' && payload.delta.text) onToken(payload.delta.text)
             })
+            trackUsage('anthropic', model, usage)
         },
         recognizeImage: async (model, { imageBase64, mimeType, prompt, signal }) => {
             const response = await fetch(`${base}/messages`, {
@@ -193,7 +252,8 @@ const anthropic = async (): Promise<Adapter> => {
                 })
             })
             if (!response.ok) throw await errorFrom(response)
-            const payload = await response.json() as { content?: { type?: string; text?: string }[] }
+            const payload = await response.json() as { content?: { type?: string; text?: string }[]; usage?: AnthropicUsagePayload }
+            trackUsage('anthropic', model, anthropicUsage(payload.usage))
             return (payload.content?.map((part) => part.type === 'text' ? part.text ?? '' : '').join('') ?? '').trim()
         }
     }
@@ -241,8 +301,8 @@ const local = async (): Promise<Adapter> => {
                     }
                 })
         },
-        stream: openAiCompatible(base, token).stream,
-        recognizeImage: openAiCompatible(base, token).recognizeImage
+        stream: openAiCompatible('local', base, token).stream,
+        recognizeImage: openAiCompatible('local', base, token).recognizeImage
     }
 }
 
@@ -252,7 +312,7 @@ const adapterFor = async (provider: LlmProvider): Promise<Adapter> => {
     if (provider === 'local') return local()
     const key = await getCredential('openai')
     if (!key) throw new Error('Add an OpenAI API key in Settings.')
-    return openAiCompatible('https://api.openai.com', key, 'max_completion_tokens')
+    return openAiCompatible('openai', 'https://api.openai.com', key, 'max_completion_tokens')
 }
 
 const resolveSelection = async (selection?: AssistantModelSelection): Promise<AssistantModelSelection> => {

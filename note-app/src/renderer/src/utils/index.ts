@@ -7,6 +7,9 @@ export const cn = (...args: ClassValue[]): string => {
     return twMerge(clsx(args))
 }
 
+// Locally estimated AI spend is always shown as USD with two decimals.
+export const formatEstimatedUsd = (value: number): string => `$${value.toFixed(2)}`
+
 // Subsequence fuzzy match. Returns a relevance score (higher = better) or
 // null when the query is not a subsequence of the text. Consecutive and
 // word-start matches score extra; exact substrings score highest.

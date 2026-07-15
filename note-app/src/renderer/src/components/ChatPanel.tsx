@@ -1,7 +1,9 @@
-import { ActionButton, AssistantMessageContent, AssistantSelect, AssistantSelectOption, NoteBlockPreviewModal } from '@/components'
+import { ActionButton, AssistantMessageContent, AssistantSelect, AssistantSelectOption, NoteBlockPreviewModal, UsageDoughnut } from '@/components'
 import { useAssistant, useAssistantActions, useBlockActions, useBlockDrag, useBlocks, useGoalActions, useGoals, useI18n, usePanelActions, usePanels, useSettings } from '@renderer/context'
+import { onboardingEvents } from '@renderer/onboarding/events'
 import { blockLabel, cn } from '@renderer/utils'
 import { assistantDisplayName, researchCategory } from '@shared/constants'
+import { LlmUsageSummary } from '@shared/llmUsage'
 import { AssistantMode, BlockMeta, LlmProvider } from '@shared/models'
 import { LlmModel } from '@shared/types'
 import { FormEvent, JSX, KeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -82,6 +84,7 @@ export const ChatPanel = (): JSX.Element => {
   const [modelResult, setModelResult] = useState<{ provider: LlmProvider; models: LlmModel[]; error: string | null } | null>(null)
   const [preview, setPreview] = useState<PreviewedBlock | null>(null)
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+  const [usageSummary, setUsageSummary] = useState<LlmUsageSummary | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const copyResetTimerRef = useRef<number | null>(null)
   const active = useMemo(() => conversations.find((item) => item.id === activeConversationId) ?? null, [conversations, activeConversationId])
@@ -119,6 +122,31 @@ export const ChatPanel = (): JSX.Element => {
     })
     return () => { cancelled = true }
   }, [settings.llm.provider, settings.llm.model, t])
+
+  const usageBudget = settings.llm.usageBudget
+  useEffect(() => {
+    if (!isRightPanelOpen || !usageBudget.enabled || usageBudget.limitUsd <= 0) return
+    let cancelled = false
+    const refreshUsage = (): void => {
+      void window.context.getLlmUsageSummary()
+        .then((summary) => { if (!cancelled) setUsageSummary(summary) })
+        .catch(() => { /* Keep the last locally loaded value. */ })
+    }
+    refreshUsage()
+    const poll = window.setInterval(refreshUsage, 30_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(poll)
+    }
+  }, [
+    isRightPanelOpen,
+    isStreaming,
+    usageBudget.enabled,
+    usageBudget.limitUsd,
+    usageBudget.periodStartedAt,
+    usageBudget.resetDays,
+    usageBudget.resetInterval
+  ])
 
   const isLoadingModels = modelResult?.provider !== settings.llm.provider
   const models = useMemo(() => isLoadingModels ? [] : (modelResult?.models ?? []), [isLoadingModels, modelResult])
@@ -328,7 +356,15 @@ export const ChatPanel = (): JSX.Element => {
         <AssistantSelect label={t('assistant.mode')} ariaLabel={t('assistant.modeAria')} value={assistantMode} options={modeOptions} onChange={(value) => setAssistantMode(value as AssistantMode)} disabled={isStreaming} placement="up" />
       </div>
       {modelError && <p className="mt-1 px-1 text-[10px] text-zinc-500">{modelError}</p>}
-      <div className="mt-2 border-t border-white/10 pt-2"><ActionButton onClick={toggleRightPanel} title={t('navigation.closeAssistant')} className="border-yellow-500/50 hover:bg-yellow-500/10"><LuPanelRightClose className="h-4 w-4 text-yellow-500" /></ActionButton></div>
+      <div className="mt-2 flex items-end justify-between border-t border-white/10 pt-2">
+        <ActionButton onClick={toggleRightPanel} title={t('navigation.closeAssistant')} className="border-yellow-500/50 hover:bg-yellow-500/10"><LuPanelRightClose className="h-4 w-4 text-yellow-500" /></ActionButton>
+        {usageBudget.enabled && usageBudget.limitUsd > 0 && <UsageDoughnut
+          usedUsd={usageSummary?.currentPeriod?.estimatedUsd ?? 0}
+          limitUsd={usageBudget.limitUsd}
+          thresholds={usageBudget.thresholds}
+          onClick={() => window.dispatchEvent(new CustomEvent(onboardingEvents.openSettingsModal, { detail: { section: 'ai-usage' } }))}
+        />}
+      </div>
     </> : <div className="flex h-full flex-col items-center justify-end gap-3 pb-1"><LuSparkles className="h-4 w-4 text-zinc-600" /><ActionButton onClick={toggleRightPanel} title={t('navigation.openAssistant')}><LuPanelRightOpen className="h-4 w-4 text-zinc-300" /></ActionButton></div>}
     {preview && <NoteBlockPreviewModal
       key={preview.block.id}
