@@ -1,6 +1,7 @@
 import { ImageRecognitionSelection } from '@renderer/components/ImageRecognitionModal'
 import { ImageRecognitionInput } from '@shared/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useI18n } from '@renderer/context'
 
 export type UseImageRecognitionParams = {
     onRecognized: (text: string) => void
@@ -20,6 +21,7 @@ export type UseImageRecognitionResult = {
 export const useImageRecognition = ({
     onRecognized
 }: UseImageRecognitionParams): UseImageRecognitionResult => {
+    const { t } = useI18n()
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [isRecognizing, setIsRecognizing] = useState(false)
     const [recognitionError, setRecognitionError] = useState<string | null>(null)
@@ -44,21 +46,21 @@ export const useImageRecognition = ({
             const result = await window.context.recognizeImage(input)
             if (attempt !== attemptRef.current) return
             if ('error' in result) {
-                setRecognitionError(result.error ?? 'Image recognition failed.')
+                setRecognitionError(t('image.error.failed'))
                 return
             }
             onRecognized(result.text)
             pendingRequestRef.current = null
             setHasPendingRequest(false)
             setIsModalOpen(false)
-        } catch (error) {
+        } catch {
             if (attempt === attemptRef.current) {
-                setRecognitionError(error instanceof Error ? error.message : 'Image recognition failed.')
+                setRecognitionError(t('image.error.failed'))
             }
         } finally {
             if (attempt === attemptRef.current) setIsRecognizing(false)
         }
-    }, [onRecognized])
+    }, [onRecognized, t])
 
     const openModal = useCallback((): void => {
         attemptRef.current += 1
@@ -94,12 +96,12 @@ export const useImageRecognition = ({
                     containsHandwriting: selection.containsHandwriting
                 }, attempt)
             })
-            .catch((error) => {
+            .catch(() => {
                 if (attempt !== attemptRef.current) return
-                setRecognitionError(error instanceof Error ? error.message : 'Could not read the selected image.')
+                setRecognitionError(t('image.error.read'))
                 setIsRecognizing(false)
             })
-    }, [runRecognition])
+    }, [runRecognition, t])
 
     const retryRecognition = useCallback((): void => {
         const input = pendingRequestRef.current

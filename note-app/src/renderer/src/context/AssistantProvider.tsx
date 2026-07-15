@@ -6,6 +6,7 @@ import { useGoalActions, useGoals } from './GoalsContext'
 import { usePanels, usePanelActions } from './PanelsContext'
 import { useSettings } from './SettingsContext'
 import { AssistantActions, AssistantActionsContext, AssistantState, AssistantStateContext } from './AssistantContext'
+import { useI18n } from './I18nContext'
 
 type ConversationPreferences = {
   mode: AssistantMode
@@ -65,11 +66,11 @@ const preferencesFor = (
   })
 }
 
-const createConversation = (preferences: ConversationPreferences): AssistantConversation => {
+const createConversation = (preferences: ConversationPreferences, title: string): AssistantConversation => {
   const now = Date.now()
   return {
     id: crypto.randomUUID(),
-    title: 'New conversation',
+    title,
     createdAt: now,
     updatedAt: now,
     messages: [],
@@ -104,6 +105,7 @@ const scopeDates = (preferences: ConversationPreferences): Pick<AssistantScope, 
 
 export const AssistantProvider = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
   const { settings } = useSettings()
+  const { t } = useI18n()
   const { selectedCategory } = useGoals()
   const { selectCategory } = useGoalActions()
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
@@ -116,6 +118,8 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
   const [isLoaded, setIsLoaded] = useState(false)
   const requestIdRef = useRef<string | null>(null)
   const requestConversationIdRef = useRef<string | null>(null)
+  const requestAttachedBlockIdsRef = useRef<string[]>([])
+  const attachedBlockIdsRef = useRef(attachedBlockIds)
   const activeConversationIdRef = useRef(activeConversationId)
   const conversationsRef = useRef(conversations)
   const { isRightPanelOpen } = usePanels()
@@ -125,6 +129,10 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     activeConversationIdRef.current = activeConversationId
     conversationsRef.current = conversations
   }, [activeConversationId, conversations])
+
+  useEffect(() => {
+    attachedBlockIdsRef.current = attachedBlockIds
+  }, [attachedBlockIds])
 
   useEffect(() => {
     void window.context.getAssistantConversations().then((saved) => {
@@ -153,6 +161,7 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
       return
     }
     if (event.type === 'done') {
+      const completedAttachedBlockIds = requestAttachedBlockIdsRef.current
       setConversations((previous) => previous.map((conversation) => conversation.id !== requestConversationIdRef.current ? conversation : {
         ...conversation,
         updatedAt: Date.now(),
@@ -171,14 +180,21 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
       }))
       requestIdRef.current = null
       requestConversationIdRef.current = null
+      requestAttachedBlockIdsRef.current = []
+      const nextAttachedBlockIds = attachedBlockIdsRef.current.filter(
+        (id) => !completedAttachedBlockIds.includes(id)
+      )
+      attachedBlockIdsRef.current = nextAttachedBlockIds
+      setAttachedBlockIds(nextAttachedBlockIds)
       setIsStreaming(false)
       return
     }
     requestIdRef.current = null
     requestConversationIdRef.current = null
+    requestAttachedBlockIdsRef.current = []
     setIsStreaming(false)
-    setError(event.message)
-  }), [])
+    setError(t('assistant.error.reach'))
+  }), [t])
 
   const ensureOpen = useCallback(() => { if (!isRightPanelOpen) toggleRightPanel() }, [isRightPanelOpen, toggleRightPanel])
 
@@ -199,18 +215,19 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     if (!trimmed || isStreaming) return
     const dates = scopeDates(preferences)
     if (!dates) {
-      setError('Choose a valid custom start and end date before sending.')
+      setError(t('assistant.error.dates'))
       return
     }
     ensureOpen()
     setError(null)
-    const requestAttachedBlockIds = attachedBlockIds
+    const requestAttachedBlockIds = [...attachedBlockIdsRef.current]
+    requestAttachedBlockIdsRef.current = requestAttachedBlockIds
     const requestId = crypto.randomUUID()
     requestIdRef.current = requestId
     const userMessage: AssistantMessage = { id: crypto.randomUUID(), role: 'user', text: trimmed, createdAt: Date.now(), provider: preferences.provider, model: preferences.model }
     const assistantMessage: AssistantMessage = { id: crypto.randomUUID(), role: 'assistant', text: '', createdAt: Date.now(), provider: preferences.provider, model: preferences.model }
     const existing = activeConversation
-    const newConversation = existing ?? createConversation(preferences)
+    const newConversation = existing ?? createConversation(preferences, t('assistant.newConversation'))
     const conversationId = newConversation.id
     requestConversationIdRef.current = conversationId
     const history: LlmMessage[] = newConversation.messages.map((message) => ({ role: message.role, content: message.text })).filter((message) => message.content)
@@ -228,28 +245,39 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
     if (!activeConversationId) setActiveConversationId(conversationId)
     setIsStreaming(true)
     const selection: AssistantModelSelection = { provider: preferences.provider, model: preferences.model }
-    const response = await window.context.startAssistantStream(requestId, trimmed, history, {
-      mode: preferences.mode,
-      goalMode: preferences.goalMode,
-      openGoalId: preferences.mode === 'research' ? researchCategory : selectedCategory,
-      ...(requestAttachedBlockIds.length > 0 ? { attachedBlockIds: requestAttachedBlockIds } : {}),
-      ...dates
-    }, selection)
+    let response: Awaited<ReturnType<typeof window.context.startAssistantStream>>
+    try {
+      response = await window.context.startAssistantStream(requestId, trimmed, history, {
+        mode: preferences.mode,
+        goalMode: preferences.goalMode,
+        openGoalId: preferences.mode === 'research' ? researchCategory : selectedCategory,
+        ...(requestAttachedBlockIds.length > 0 ? { attachedBlockIds: requestAttachedBlockIds } : {}),
+        ...dates
+      }, selection)
+    } catch {
+      requestIdRef.current = null
+      requestConversationIdRef.current = null
+      requestAttachedBlockIdsRef.current = []
+      setIsStreaming(false)
+      setError(t('assistant.error.reach'))
+      return
+    }
     if (!response.ok) {
       requestIdRef.current = null
       requestConversationIdRef.current = null
+      requestAttachedBlockIdsRef.current = []
       setIsStreaming(false)
-      setError(response.error ?? 'Could not start the assistant.')
+      setError(t('assistant.error.start'))
       return
     }
-    setAttachedBlockIds((previous) => previous.filter((id) => !requestAttachedBlockIds.includes(id)))
-  }, [activeConversation, activeConversationId, attachedBlockIds, ensureOpen, isStreaming, preferences, selectedCategory])
+  }, [activeConversation, activeConversationId, ensureOpen, isStreaming, preferences, selectedCategory, t])
 
   const cancel = useCallback(() => {
     if (!requestIdRef.current) return
     void window.context.cancelAssistantStream(requestIdRef.current)
     requestIdRef.current = null
     requestConversationIdRef.current = null
+    requestAttachedBlockIdsRef.current = []
     setIsStreaming(false)
   }, [])
   const newConversation = useCallback(() => {
@@ -279,10 +307,15 @@ export const AssistantProvider = ({ children }: { children: React.ReactNode }): 
   }, [ensureOpen])
   const attachBlock = useCallback((blockId: string) => {
     ensureOpen()
-    setAttachedBlockIds((previous) => previous.includes(blockId) ? previous : [...previous, blockId])
+    if (attachedBlockIdsRef.current.includes(blockId)) return
+    const next = [...attachedBlockIdsRef.current, blockId]
+    attachedBlockIdsRef.current = next
+    setAttachedBlockIds(next)
   }, [ensureOpen])
   const removeAttachedBlock = useCallback((blockId: string) => {
-    setAttachedBlockIds((previous) => previous.filter((id) => id !== blockId))
+    const next = attachedBlockIdsRef.current.filter((id) => id !== blockId)
+    attachedBlockIdsRef.current = next
+    setAttachedBlockIds(next)
   }, [])
   const setAssistantMode = useCallback((mode: AssistantMode) => {
     if (requestIdRef.current) return

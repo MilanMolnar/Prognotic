@@ -56,6 +56,16 @@ export type Goal = {
     createdAt: number
 }
 
+// A personal-dictionary entry: a short key (command, phrase, or technical
+// term) paired with a longer explanation. Keys are unique case-insensitively.
+export type GlossaryEntry = {
+    id: string
+    key: string
+    explanation: string
+    createdAt: number
+    updatedAt: number
+}
+
 // How the main panel captures notes: 'chat' = feed with a chat-style bar at
 // the bottom, 'natural' = a document-style writing surface pinned at the top.
 export type CaptureMode = 'chat' | 'natural'
@@ -63,6 +73,8 @@ export type CaptureMode = 'chat' | 'natural'
 // Speech-to-text backend for capture: native Windows (Win+H), native macOS
 // (Fn-D), or the Wispr Flow developer API. Persisted in settings.json.
 export type DictationMode = 'windows' | 'macos' | 'whisprflow'
+
+export type { UiLocale } from './locales'
 
 export type LlmProvider = 'gemini' | 'openai' | 'anthropic' | 'local'
 
@@ -145,7 +157,11 @@ export type GoogleCalendarSettings = {
 }
 
 export type AppSettings = {
+    uiLocale: import('./locales').UiLocale
     blockWindowMinutes: number
+    // Maximum characters allowed for glossary keys; clamped to the range in
+    // constants.ts on save.
+    glossaryKeyMaxLength: number
     pinnedGoalIds: string[]
     captureMode: CaptureMode
     dictationMode: DictationMode

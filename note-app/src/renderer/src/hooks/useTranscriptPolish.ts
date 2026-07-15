@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useI18n } from '@renderer/context/I18nContext'
 
 export type UseTranscriptPolishParams = {
     enabled: boolean
@@ -15,6 +16,7 @@ export type UseTranscriptPolishResult = {
 }
 
 export const useTranscriptPolish = ({ enabled, onAccepted }: UseTranscriptPolishParams): UseTranscriptPolishResult => {
+    const { t } = useI18n()
     const [pendingTranscript, setPendingTranscript] = useState<string | null>(null)
     const [polishError, setPolishError] = useState<string | null>(null)
     const [isPolishing, setIsPolishing] = useState(false)
@@ -26,17 +28,17 @@ export const useTranscriptPolish = ({ enabled, onAccepted }: UseTranscriptPolish
         try {
             const result = await window.context.polishTranscript(text)
             if ('error' in result) {
-                setPolishError(result.error ?? 'Transcript cleanup failed.')
+                setPolishError(t('ai.transcriptCleanupFailed'))
                 return
             }
             onAccepted(result.text || text)
             setPendingTranscript(null)
-        } catch (error) {
-            setPolishError(error instanceof Error ? error.message : 'Transcript cleanup failed.')
+        } catch {
+            setPolishError(t('ai.transcriptCleanupFailed'))
         } finally {
             setIsPolishing(false)
         }
-    }, [onAccepted])
+    }, [onAccepted, t])
 
     const acceptTranscript = useCallback(async (text: string): Promise<void> => {
         if (!enabled) {

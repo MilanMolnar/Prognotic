@@ -1,6 +1,7 @@
 import { cn } from '@renderer/utils'
 import { JSX, KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { LuCheck, LuChevronDown, LuSearch, LuSparkles } from 'react-icons/lu'
+import { useI18n } from '@renderer/context'
 
 export type AssistantSelectOption = {
   value: string
@@ -33,8 +34,9 @@ export const AssistantSelect = ({
   placement = 'down',
   maxVisibleOptions,
   searchableThreshold,
-  searchPlaceholder = 'Filter options...'
+  searchPlaceholder
 }: AssistantSelectProps): JSX.Element => {
+  const { t } = useI18n()
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [search, setSearch] = useState('')
@@ -124,13 +126,13 @@ export const AssistantSelect = ({
       className={cn('flex w-full items-center gap-1 rounded border bg-zinc-900 px-1.5 py-1 text-left text-xs outline-none transition-colors disabled:opacity-40', isOpen ? 'border-yellow-500/60 text-yellow-400' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500')}
     >
       {selected?.isDefault && <LuSparkles className="h-3 w-3 shrink-0 text-yellow-500" />}
-      <span className="min-w-0 flex-1 truncate">{selected?.label ?? 'Select'}</span>
+      <span className="min-w-0 flex-1 truncate">{selected?.label ?? t('assistant.select')}</span>
       <LuChevronDown className={cn('h-3.5 w-3.5 shrink-0 transition-transform', isOpen && 'rotate-180')} />
     </button>
     {isOpen && <div className={cn('absolute left-0 right-0 z-50 rounded border border-zinc-700 bg-zinc-900 p-1 shadow-xl', placement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1')}>
       {isSearchable && <div className="mb-1 flex items-center gap-1 rounded border border-zinc-700 bg-zinc-950 px-1.5 focus-within:border-yellow-500/50">
         <LuSearch className="h-3 w-3 shrink-0 text-zinc-500" />
-        <input ref={searchRef} value={search} onChange={(event) => { setSearch(event.target.value); setActiveIndex(-1) }} onKeyDown={handleKeyDown} placeholder={searchPlaceholder} className="min-w-0 flex-1 bg-transparent py-1 text-xs text-zinc-300 outline-none placeholder:text-zinc-600" />
+        <input ref={searchRef} value={search} onChange={(event) => { setSearch(event.target.value); setActiveIndex(-1) }} onKeyDown={handleKeyDown} placeholder={searchPlaceholder ?? t('assistant.filterOptions')} className="min-w-0 flex-1 bg-transparent py-1 text-xs text-zinc-300 outline-none placeholder:text-zinc-600" />
       </div>}
       <div id={listboxId} role="listbox" aria-label={ariaLabel} className="overflow-y-auto" style={{ maxHeight: (maxVisibleOptions ?? 9) * 24 }}>
       {filteredOptions.map((option, index) => {
@@ -151,7 +153,7 @@ export const AssistantSelect = ({
           {isSelected && <LuCheck className="h-3 w-3 shrink-0 text-yellow-500" />}
         </button>
       })}
-      {filteredOptions.length === 0 && <p className="px-1.5 py-2 text-center text-xs text-zinc-500">No matching options</p>}
+      {filteredOptions.length === 0 && <p className="px-1.5 py-2 text-center text-xs text-zinc-500">{t('assistant.noMatchingOptions')}</p>}
       </div>
     </div>}
   </div>

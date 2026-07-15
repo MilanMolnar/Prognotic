@@ -1,6 +1,8 @@
 import { appDirectory, defaultSettings, excerptMaxLength, fileEncoding, goalsFileName, indexFileName, maxPinnedGoals, settingsFileName } from "@shared/constants"
+import { clampGlossaryKeyMaxLength } from '@shared/glossary'
 import { reconcileUserGoalPresence, setGoalPresence, userGoalPresenceForCategories } from '@shared/goalPresence'
 import { AppSettings, AssistantConversation, BlockMeta, Goal, LlmCredentialName } from "@shared/models"
+import { normalizeUiLocale } from '@shared/locales'
 import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, CreateBlock, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteGoal, GetAssistantConversations, GetBlocks, GetGoals, GetSettings, ReadBlock, RenameGoal, SaveAssistantConversations, SetSettings, UpdateBlockCategories, WriteBlock } from "@shared/types"
 import { randomUUID } from "crypto"
 import { dialog, safeStorage } from "electron"
@@ -557,9 +559,11 @@ export const deleteGoal: DeleteGoal = async (id) => {
 }
 
 const clampSettings = (settings: Partial<AppSettings>): AppSettings => ({
+    uiLocale: normalizeUiLocale(settings.uiLocale),
     blockWindowMinutes: typeof settings.blockWindowMinutes === 'number' && Number.isFinite(settings.blockWindowMinutes)
         ? Math.max(1, Math.round(settings.blockWindowMinutes))
         : defaultSettings.blockWindowMinutes,
+    glossaryKeyMaxLength: clampGlossaryKeyMaxLength(settings.glossaryKeyMaxLength),
     pinnedGoalIds: Array.isArray(settings.pinnedGoalIds)
         ? settings.pinnedGoalIds.filter((id): id is string => typeof id === 'string').slice(0, maxPinnedGoals)
         : defaultSettings.pinnedGoalIds,

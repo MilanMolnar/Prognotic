@@ -1,4 +1,4 @@
-import { useBlockActions, useBlocks, useCalendar, useCalendarActions, useGoalActions } from '@renderer/context'
+import { useBlockActions, useBlocks, useCalendar, useCalendarActions, useGoalActions, useI18n } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import {
   calendarItemStartDate,
@@ -22,6 +22,7 @@ export const CalendarView = (): JSX.Element => {
   const { blocks } = useBlocks()
   const { selectBlock } = useBlockActions()
   const { selectCategory } = useGoalActions()
+  const { formatDateTime, formatNumber, t } = useI18n()
   const [mode, setMode] = useState<CalendarMode>('month')
   const [cursor, setCursor] = useState(() => new Date())
 
@@ -31,7 +32,6 @@ export const CalendarView = (): JSX.Element => {
   const uncertainCount = (items ?? []).filter(
     (item) => item.deletedAt === undefined && item.status === 'uncertain'
   ).length
-  const locale = window.context.locale
   const monthDates = monthGridDates(cursor)
   const weekStart = startOfWeek(cursor)
   const weekDates = Array.from({ length: 7 }, (_, index) => {
@@ -61,10 +61,10 @@ export const CalendarView = (): JSX.Element => {
   }
 
   const heading = mode === 'month'
-    ? new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(cursor)
+    ? formatDateTime(cursor, { month: 'long', year: 'numeric' })
     : mode === 'week'
-      ? `${new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(weekDates[0])} – ${new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' }).format(weekDates[6])}`
-      : new Intl.DateTimeFormat(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(cursor)
+      ? `${formatDateTime(weekDates[0], { month: 'short', day: 'numeric' })} – ${formatDateTime(weekDates[6], { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : formatDateTime(cursor, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
   const openLinkedNote = (item: CalendarItem): void => {
     if (!item.blockId) return
@@ -75,8 +75,8 @@ export const CalendarView = (): JSX.Element => {
   }
 
   const timeLabel = (item: CalendarItem): string => item.allDay
-    ? 'All day'
-    : new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(calendarItemStartDate(item))
+    ? t('calendar.allDay')
+    : formatDateTime(calendarItemStartDate(item), { hour: 'numeric', minute: '2-digit' })
 
   const renderItem = (item: CalendarItem, compact: boolean): JSX.Element => (
     <div
@@ -91,7 +91,7 @@ export const CalendarView = (): JSX.Element => {
       <button
         type="button"
         disabled={!item.blockId}
-        title={item.blockId ? 'Open linked note' : 'Imported Google event'}
+        title={item.blockId ? t('calendar.openLinked') : t('calendar.importedEvent')}
         onClick={() => openLinkedNote(item)}
         className="min-w-0 flex-1 text-left disabled:cursor-default"
       >
@@ -101,8 +101,8 @@ export const CalendarView = (): JSX.Element => {
       {item.status === 'pending_validation' && (
         <button
           type="button"
-          title="Validate calendar item"
-          aria-label={`Validate ${item.title}`}
+          title={t('calendar.validate')}
+          aria-label={t('calendar.validateNamed', { title: item.title })}
           onClick={() => { void validateItem(item.id) }}
           className="shrink-0 rounded p-0.5 text-emerald-400 hover:bg-emerald-500/20"
         >
@@ -116,11 +116,11 @@ export const CalendarView = (): JSX.Element => {
     <section className="flex h-full min-h-0 flex-col px-2 pb-2">
       <header className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3 pt-1">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => move(-1)} className="rounded p-1.5 hover:bg-zinc-700" title="Previous">
+          <button type="button" onClick={() => move(-1)} className="rounded p-1.5 hover:bg-zinc-700" title={t('calendar.previous')}>
             <LuChevronLeft className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => setCursor(new Date())} className="rounded border border-white/15 px-2 py-1 text-xs hover:bg-zinc-700">Today</button>
-          <button type="button" onClick={() => move(1)} className="rounded p-1.5 hover:bg-zinc-700" title="Next">
+          <button type="button" onClick={() => setCursor(new Date())} className="rounded border border-white/15 px-2 py-1 text-xs hover:bg-zinc-700">{t('common.today')}</button>
+          <button type="button" onClick={() => move(1)} className="rounded p-1.5 hover:bg-zinc-700" title={t('calendar.next')}>
             <LuChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -133,7 +133,7 @@ export const CalendarView = (): JSX.Element => {
               onClick={() => setMode(value)}
               className={cn('rounded px-2 py-1 text-xs capitalize', mode === value ? 'bg-yellow-500/15 text-yellow-400' : 'text-zinc-400 hover:bg-zinc-700')}
             >
-              {value}
+              {value === 'month' ? t('calendar.month') : value === 'week' ? t('calendar.week') : t('calendar.day')}
             </button>
           ))}
         </div>
@@ -145,19 +145,19 @@ export const CalendarView = (): JSX.Element => {
           onClick={() => openResolutionQueue()}
           className="mt-2 flex items-center justify-between rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300 hover:bg-yellow-500/15"
         >
-          <span>{uncertainCount} uncertain {uncertainCount === 1 ? 'item needs' : 'items need'} a time</span>
-          <span className="font-semibold">Resolve one by one →</span>
+          <span>{uncertainCount === 1 ? t('calendar.uncertainOne') : t('calendar.uncertainMany', { count: formatNumber(uncertainCount) })}</span>
+          <span className="font-semibold">{t('calendar.resolve')}</span>
         </button>
       )}
       {notice && <p className="mt-2 rounded border border-zinc-600 bg-zinc-900/60 px-2 py-1.5 text-xs text-zinc-400" role="status">{notice}</p>}
 
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">Loading calendar…</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">{t('calendar.loading')}</div>
       ) : mode === 'month' ? (
         <div className="mt-2 grid min-h-0 flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(0,1fr))] overflow-hidden rounded-md border border-white/10">
           {weekDates.map((date) => (
             <div key={date.getDay()} className="border-b border-white/10 px-2 py-1 text-center text-[11px] uppercase tracking-wide text-zinc-500">
-              {new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date)}
+              {formatDateTime(date, { weekday: 'short' })}
             </div>
           ))}
           {visibleDates.map((date, index) => {
@@ -176,10 +176,10 @@ export const CalendarView = (): JSX.Element => {
                   onClick={() => { setCursor(date); setMode('day') }}
                   className={cn('mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs hover:bg-zinc-700', sameDay(date, new Date()) && 'bg-yellow-500 text-zinc-950')}
                 >
-                  {date.getDate()}
+                  {formatNumber(date.getDate())}
                 </button>
                 <div className="space-y-1">{dateItems.slice(0, 4).map((item) => renderItem(item, true))}</div>
-                {dateItems.length > 4 && <p className="mt-1 text-[10px] text-zinc-500">+{dateItems.length - 4} more</p>}
+                {dateItems.length > 4 && <p className="mt-1 text-[10px] text-zinc-500">{t('calendar.more', { count: formatNumber(dateItems.length - 4) })}</p>}
               </div>
             )
           })}
@@ -191,12 +191,12 @@ export const CalendarView = (): JSX.Element => {
             return (
               <div key={date.toISOString()} className="min-w-0 rounded-md border border-white/10 bg-zinc-900/30 p-2">
                 <button type="button" onClick={() => { setCursor(date); setMode('day') }} className="mb-2 text-left">
-                  <span className="block text-xs text-zinc-500">{new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date)}</span>
-                  <span className={cn('text-lg', sameDay(date, new Date()) && 'text-yellow-400')}>{date.getDate()}</span>
+                  <span className="block text-xs text-zinc-500">{formatDateTime(date, { weekday: 'short' })}</span>
+                  <span className={cn('text-lg', sameDay(date, new Date()) && 'text-yellow-400')}>{formatNumber(date.getDate())}</span>
                 </button>
                 <div className="space-y-1.5">
                   {dateItems.map((item) => renderItem(item, false))}
-                  {dateItems.length === 0 && <p className="text-xs text-zinc-600">No items</p>}
+                  {dateItems.length === 0 && <p className="text-xs text-zinc-600">{t('common.noItems')}</p>}
                 </div>
               </div>
             )

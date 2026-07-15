@@ -1,5 +1,6 @@
 import { JSX } from 'react'
 import { LuX } from 'react-icons/lu'
+import { useI18n } from '@renderer/context'
 
 export type BlockMoveDialogProps = {
   targetLabel: string
@@ -17,7 +18,9 @@ export const BlockMoveDialog = ({
   onCopyOnly,
   onMove,
   onClose
-}: BlockMoveDialogProps): JSX.Element => (
+}: BlockMoveDialogProps): JSX.Element => {
+  const { t } = useI18n()
+  return (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={() => { if (!isMoving) onClose() }}>
     <div
       data-tour="block-move-dialog"
@@ -29,20 +32,20 @@ export const BlockMoveDialog = ({
     >
       <button
         type="button"
-        title="Close"
-        aria-label="Close move dialog"
+        title={t('common.close')}
+        aria-label={t('block.closeMoveDialog')}
         disabled={isMoving}
         onClick={onClose}
         className="absolute right-2 top-2 rounded p-1 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 disabled:opacity-40"
       >
         <LuX className="h-4 w-4" />
       </button>
-      <h2 id="block-move-dialog-title" className="pr-8 font-bold">Move note to {targetLabel}?</h2>
+      <h2 id="block-move-dialog-title" className="pr-8 font-bold">{t('block.moveQuestion', { goal: targetLabel })}</h2>
       <p className="mt-2 text-sm leading-relaxed text-zinc-400">
         {wasAlreadyInTarget
-          ? `This note already belongs to ${targetLabel}. You can keep its other goals or move it here exclusively.`
-          : `The note was copied to ${targetLabel}. You can keep its existing goals or move it here exclusively.`}
-        {' '}Closing this dialog keeps the copy.
+          ? t('block.moveAlready', { goal: targetLabel })
+          : t('block.moveCopied', { goal: targetLabel })}
+        {' '}{t('block.moveClosing')}
       </p>
       <div className="mt-4 flex justify-end gap-2">
         <button
@@ -52,7 +55,7 @@ export const BlockMoveDialog = ({
           onClick={onCopyOnly}
           className="rounded-md border border-zinc-500/50 px-2 py-1 text-sm hover:bg-zinc-700 disabled:opacity-40"
         >
-          Copy only
+          {t('block.copyOnly')}
         </button>
         <button
           data-tour="block-move"
@@ -61,7 +64,7 @@ export const BlockMoveDialog = ({
           onClick={onMove}
           className="rounded-md border border-yellow-500/50 px-2 py-1 text-sm text-yellow-300 hover:bg-yellow-500/15 disabled:opacity-40"
         >
-          {isMoving ? 'Moving...' : 'Move'}
+          {isMoving ? t('block.moving') : t('common.move')}
         </button>
         <button
           type="button"
@@ -69,9 +72,10 @@ export const BlockMoveDialog = ({
           onClick={onClose}
           className="rounded-md px-2 py-1 text-sm text-zinc-400 hover:bg-zinc-700 disabled:opacity-40"
         >
-          Close
+          {t('common.close')}
         </button>
       </div>
     </div>
   </div>
-)
+  )
+}

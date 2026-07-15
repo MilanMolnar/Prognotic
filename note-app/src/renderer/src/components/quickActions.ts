@@ -2,12 +2,11 @@
 // configurable list so a future settings UI can let users edit their own
 // quick LLM actions; the defaults below are hardcoded for now.
 export type QuickAction = {
-  id: string
-  label: string
+  id: 'translate' | 'send-to-research' | 'explain'
 }
 
 export const defaultQuickActions: QuickAction[] = [
-  { id: 'translate', label: 'Translate' },
-  { id: 'send-to-research', label: 'Send to research' },
-  { id: 'explain', label: 'Explain' }
+  { id: 'translate' },
+  { id: 'send-to-research' },
+  { id: 'explain' }
 ]

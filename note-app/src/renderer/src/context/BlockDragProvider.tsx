@@ -16,8 +16,9 @@ import {
 } from './BlockDragContext'
 import { useBlockActions, useBlocks } from './BlocksContext'
 import { useGoals } from './GoalsContext'
+import { useI18n } from './I18nContext'
 
-const longPressMs = 250
+const activationDelayMs = 100
 const movementSlop = 8
 const quickNotesRowId = 'quick-notes'
 
@@ -50,6 +51,7 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
   const { goals } = useGoals()
   const { updateBlockCategories } = useBlockActions()
   const { attachBlock } = useAssistantActions()
+  const { t } = useI18n()
   const [activeDrag, setActiveDrag] = useState<ActiveBlockDrag | null>(null)
   const [movePrompt, setMovePrompt] = useState<BlockMovePrompt | null>(null)
   const [isMoving, setIsMoving] = useState(false)
@@ -79,11 +81,26 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
     restoreCursor()
   }, [restoreCursor, setCurrentDrag])
 
+  const activateSession = useCallback((session: PressSession): void => {
+    if (pressRef.current !== session || activeDragRef.current) return
+    window.clearTimeout(session.timerId)
+    const validGoalIds = new Set((goalsRef.current ?? []).map((goal) => goal.id))
+    previousCursorRef.current = document.body.style.cursor
+    document.body.style.cursor = 'grabbing'
+    setCurrentDrag({
+      blockId: session.blockId,
+      label: session.label,
+      x: session.currentX,
+      y: session.currentY,
+      target: targetAtPoint(session.currentX, session.currentY, validGoalIds)
+    })
+  }, [setCurrentDrag])
+
   const categoryLabel = useCallback((categoryId: string | null): string => {
-    if (categoryId === null) return 'Quick Notes'
-    if (categoryId === researchCategory) return 'Research'
-    return goalsRef.current?.find((goal) => goal.id === categoryId)?.name ?? 'Goal'
-  }, [])
+    if (categoryId === null) return t('navigation.quickNotes')
+    if (categoryId === researchCategory) return t('navigation.research')
+    return goalsRef.current?.find((goal) => goal.id === categoryId)?.name ?? t('block.goalFallback')
+  }, [t])
 
   const completeDrop = useCallback(async (drag: ActiveBlockDrag): Promise<void> => {
     const block = blocksRef.current?.find((candidate) => candidate.id === drag.blockId)
@@ -103,7 +120,7 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
         [...block.categories, targetCategoryId]
       )
       if (!copied) {
-        showBlockToast('Could not copy this note to the selected goal.')
+        showBlockToast(t('block.error.copyGoal'))
         return
       }
       flyLabelToCategoryRow(
@@ -121,9 +138,9 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
         dispatchOnboardingEvent(onboardingEvents.blockDroppedToQuickNotes, { blockId: block.id })
       }
     } catch {
-      showBlockToast('Could not copy this note to the selected goal.')
+      showBlockToast(t('block.error.copyGoal'))
     }
-  }, [attachBlock, categoryLabel, updateBlockCategories])
+  }, [attachBlock, categoryLabel, t, updateBlockCategories])
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent): void => {
@@ -135,7 +152,8 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
       const drag = activeDragRef.current
       if (!drag) {
         if (Math.hypot(event.clientX - press.clientX, event.clientY - press.clientY) > movementSlop) {
-          clearSession()
+          event.preventDefault()
+          activateSession(press)
         }
         return
       }
@@ -184,7 +202,7 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
       window.removeEventListener('keydown', onKeyDown)
       clearSession()
     }
-  }, [clearSession, completeDrop, setCurrentDrag])
+  }, [activateSession, clearSession, completeDrop, setCurrentDrag])
 
   const beginPress = useCallback((press: BeginBlockPress): void => {
     clearSession()
@@ -194,21 +212,9 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
       currentY: press.clientY,
       timerId: 0
     }
-    session.timerId = window.setTimeout(() => {
-      if (pressRef.current !== session) return
-      const validGoalIds = new Set((goalsRef.current ?? []).map((goal) => goal.id))
-      previousCursorRef.current = document.body.style.cursor
-      document.body.style.cursor = 'grabbing'
-      setCurrentDrag({
-        blockId: session.blockId,
-        label: session.label,
-        x: session.currentX,
-        y: session.currentY,
-        target: targetAtPoint(session.currentX, session.currentY, validGoalIds)
-      })
-    }, longPressMs)
+    session.timerId = window.setTimeout(() => activateSession(session), activationDelayMs)
     pressRef.current = session
-  }, [clearSession, setCurrentDrag])
+  }, [activateSession, clearSession])
 
   const dismissMovePrompt = useCallback((): void => setMovePrompt(null), [])
 
@@ -223,13 +229,13 @@ export const BlockDragProvider = ({ children }: { children: React.ReactNode }): 
         })
         setMovePrompt(null)
       }
-      else showBlockToast('Could not move this note.')
+      else showBlockToast(t('block.error.move'))
     } catch {
-      showBlockToast('Could not move this note.')
+      showBlockToast(t('block.error.move'))
     } finally {
       setIsMoving(false)
     }
-  }, [isMoving, movePrompt, updateBlockCategories])
+  }, [isMoving, movePrompt, t, updateBlockCategories])
 
   const stateValue: BlockDragState = useMemo(() => ({
     activeDrag,

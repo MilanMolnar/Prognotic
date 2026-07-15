@@ -1,4 +1,4 @@
-import { usePluginActions, usePlugins } from '@renderer/context'
+import { useI18n, usePluginActions, usePlugins } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import type { PluginConfig, PluginConfigValue } from '@shared/plugins'
 import { JSX, useEffect, useState } from 'react'
@@ -10,6 +10,7 @@ export type PluginManagerModalProps = { onClose: () => void }
 
 export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.Element => {
   const { plugins, pluginsPath, error } = usePlugins()
+  const { t } = useI18n()
   const {
     refreshPlugins,
     setPluginEnabled,
@@ -42,7 +43,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
     try {
       setStatus(await action())
     } catch (actionError) {
-      setStatus(actionError instanceof Error ? actionError.message : 'Plugin action failed.')
+      setStatus(actionError instanceof Error ? actionError.message : t('plugin.error.action'))
     } finally {
       setBusyKey(null)
     }
@@ -51,9 +52,9 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
   const copyPath = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(pluginsPath)
-      setStatus('Plugins folder path copied.')
+      setStatus(t('plugin.pathCopied'))
     } catch {
-      setStatus('Could not copy the plugins folder path.')
+      setStatus(t('plugin.error.copyPath'))
     }
   }
 
@@ -69,7 +70,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
 
   const displayedStatus = status ?? error
   const displayedStatusIsError = status !== null
-    ? /could not|failed|invalid|unavailable/i.test(status)
+    ? /could not|failed|invalid|unavailable|nem sikerült|érvénytelen|nem érhető/i.test(status)
     : error !== null
 
   return (
@@ -83,30 +84,30 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
       <div data-tour="plugin-manager" className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
         <div className="flex items-start gap-3 border-b border-white/10 p-4">
           <div className="min-w-0 flex-1">
-            <h2 className="font-semibold text-zinc-100">Plugins</h2>
-            <p className="mt-1 text-xs text-zinc-500">Copy a local plugin folder and refresh, or create a v1 plugin with AI.</p>
+            <h2 className="font-semibold text-zinc-100">{t('plugin.manager.title')}</h2>
+            <p className="mt-1 text-xs text-zinc-500">{t('plugin.manager.description')}</p>
           </div>
-          <button type="button" title="Create plugin with AI" onClick={() => setIsWizardOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-violet-500/40 px-2.5 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10">
-            <LuSparkles className="h-3.5 w-3.5" aria-hidden /> Create with AI
+          <button type="button" title={t('plugin.manager.createAiTitle')} onClick={() => setIsWizardOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-violet-500/40 px-2.5 py-1.5 text-xs text-violet-300 hover:bg-violet-500/10">
+            <LuSparkles className="h-3.5 w-3.5" aria-hidden /> {t('plugin.manager.createAi')}
           </button>
-          <button data-tour="plugin-close" type="button" title="Close plugin manager" onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100">
+          <button data-tour="plugin-close" type="button" title={t('plugin.manager.close')} onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100">
             <LuX className="h-5 w-5" />
           </button>
         </div>
 
         <div data-tour="plugin-browse" className="border-b border-white/10 px-4 py-3">
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded bg-zinc-950 px-2 py-1.5 text-xs text-zinc-400" title={pluginsPath}>{pluginsPath || 'Loading plugins folder...'}</code>
-            <button type="button" title="Copy path" disabled={!pluginsPath} onClick={() => { void copyPath() }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuClipboard className="h-4 w-4" /></button>
-            <button type="button" title="Open folder" disabled={!pluginsPath} onClick={() => { void runBusy('open-folder', openPluginsFolder) }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuFolderOpen className="h-4 w-4" /></button>
-            <button type="button" title="Refresh plugins" disabled={busyKey !== null} onClick={() => { void runBusy('refresh', async () => { await refreshPlugins(); return null }) }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuRefreshCw className={cn('h-4 w-4', busyKey === 'refresh' && 'animate-spin')} /></button>
+            <code className="min-w-0 flex-1 truncate rounded bg-zinc-950 px-2 py-1.5 text-xs text-zinc-400" title={pluginsPath}>{pluginsPath || t('plugin.manager.loadingFolder')}</code>
+            <button type="button" title={t('plugin.manager.copyPath')} disabled={!pluginsPath} onClick={() => { void copyPath() }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuClipboard className="h-4 w-4" /></button>
+            <button type="button" title={t('plugin.manager.openFolder')} disabled={!pluginsPath} onClick={() => { void runBusy('open-folder', openPluginsFolder) }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuFolderOpen className="h-4 w-4" /></button>
+            <button type="button" title={t('plugin.manager.refresh')} disabled={busyKey !== null} onClick={() => { void runBusy('refresh', async () => { await refreshPlugins(); return null }) }} className="rounded border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800 disabled:opacity-40"><LuRefreshCw className={cn('h-4 w-4', busyKey === 'refresh' && 'animate-spin')} /></button>
           </div>
           {displayedStatus && <p className={cn('mt-2 text-xs', displayedStatusIsError ? 'text-red-400' : 'text-zinc-400')} role="status">{displayedStatus}</p>}
         </div>
 
         <div data-tour="plugin-list" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          {plugins === undefined && <p className="text-sm text-zinc-500">Discovering plugins...</p>}
-          {plugins?.length === 0 && <p className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">No plugin folders found.</p>}
+          {plugins === undefined && <p className="text-sm text-zinc-500">{t('plugin.manager.discovering')}</p>}
+          {plugins?.length === 0 && <p className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">{t('plugin.manager.empty')}</p>}
           {plugins?.map((plugin) => {
             const canToggle = plugin.id !== null && (plugin.valid || plugin.enabled)
             const isConfiguring = plugin.id !== null && configuringId === plugin.id
@@ -121,15 +122,15 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-zinc-100">{plugin.name}</h3>
                       {plugin.aiGenerated && (
-                        <span title="Created with AI" aria-label="Created with AI" className="inline-flex text-violet-300">
+                        <span title={t('plugin.manager.createdAi')} aria-label={t('plugin.manager.createdAi')} className="inline-flex text-violet-300">
                           <LuSparkles className="h-3.5 w-3.5" aria-hidden />
                         </span>
                       )}
                       <span className="text-xs text-zinc-500">v{plugin.version}</span>
-                      <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px]', plugin.valid ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400')}>{plugin.valid ? 'Ready' : 'Unusable'}</span>
+                      <span className={cn('rounded-full border px-1.5 py-0.5 text-[10px]', plugin.valid ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400')}>{plugin.valid ? t('plugin.manager.ready') : t('plugin.manager.unusable')}</span>
                     </div>
                     {plugin.description && <p className="mt-1 text-sm text-zinc-400">{plugin.description}</p>}
-                    <p className="mt-1 text-[11px] text-zinc-600">Folder: {plugin.folderName}</p>
+                    <p className="mt-1 text-[11px] text-zinc-600">{t('plugin.manager.folder', { folder: plugin.folderName })}</p>
                     {plugin.reason && <p className="mt-2 text-xs text-red-400" role="alert">{plugin.reason}</p>}
                   </div>
                   <label className={cn('flex shrink-0 items-center gap-2 text-xs', canToggle ? 'text-zinc-300' : 'text-zinc-600')}>
@@ -144,25 +145,25 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
                       }}
                       className="accent-yellow-500"
                     />
-                    Enabled
+                    {t('plugin.manager.enabled')}
                   </label>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {plugin.valid && plugin.id && plugin.configSchema.length > 0 && (
-                    <button type="button" onClick={() => isConfiguring ? setConfiguringId(null) : beginConfigure(plugin.id as string, plugin.config)} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800">{isConfiguring ? 'Close configuration' : 'Configure'}</button>
+                    <button type="button" onClick={() => isConfiguring ? setConfiguringId(null) : beginConfigure(plugin.id as string, plugin.config)} className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800">{isConfiguring ? t('plugin.manager.closeConfig') : t('plugin.manager.configure')}</button>
                   )}
                   <button
                     data-tour={plugin.id === 'dietary' ? 'plugin-dietary-delete' : undefined}
                     type="button"
                     disabled={busyKey !== null}
                     onClick={() => {
-                      if (!window.confirm(`Remove ${plugin.name}? Its note blocks will remain in the vault.`)) return
+                      if (!window.confirm(t('plugin.manager.removeConfirm', { plugin: plugin.name }))) return
                       void runBusy(`remove:${plugin.folderName}`, () => removePlugin(plugin.folderName))
                     }}
                     className="ml-auto inline-flex items-center gap-1 rounded border border-red-500/30 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
                   >
-                    <LuTrash2 className="h-3.5 w-3.5" /> Remove
+                    <LuTrash2 className="h-3.5 w-3.5" /> {t('common.remove')}
                   </button>
                 </div>
 
@@ -199,7 +200,7 @@ export const PluginManagerModal = ({ onClose }: PluginManagerModalProps): JSX.El
                       </div>
                     ))}
                     <div className="flex justify-end">
-                      <button type="button" disabled={busyKey !== null} onClick={() => { void runBusy(`config:${plugin.id}`, async () => { const message = await setPluginConfig(plugin.id as string, draftConfig); if (!message) setConfiguringId(null); return message }) }} className="rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-40">Save configuration</button>
+                      <button type="button" disabled={busyKey !== null} onClick={() => { void runBusy(`config:${plugin.id}`, async () => { const message = await setPluginConfig(plugin.id as string, draftConfig); if (!message) setConfiguringId(null); return message }) }} className="rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-40">{t('plugin.manager.saveConfig')}</button>
                     </div>
                   </div>
                 )}

@@ -9,12 +9,10 @@ import {
     CalendarStateContext
 } from './CalendarContext'
 import { useSettings, useSettingsActions } from './SettingsContext'
+import { useI18n } from './I18nContext'
 
 const replaceItem = (items: CalendarItem[] | undefined, updated: CalendarItem): CalendarItem[] =>
     (items ?? []).map((item) => item.id === updated.id ? updated : item)
-
-const errorText = (error: unknown, fallback: string): string =>
-    error instanceof Error ? error.message : fallback
 
 export const CalendarProvider = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
     const [items, setItems] = useState<CalendarItem[] | undefined>(undefined)
@@ -24,6 +22,7 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }): R
     const [notice, setNotice] = useState<string | null>(null)
     const { settings } = useSettings()
     const { updateSettings } = useSettingsActions()
+    const { t } = useI18n()
 
     const itemsRef = useRef(items)
     const isSyncingRef = useRef(isSyncing)
@@ -38,12 +37,12 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }): R
             const loaded = await window.context.backfillCalendar()
             setItems(loaded)
             setNotice(null)
-        } catch (error) {
-            setNotice(errorText(error, 'Could not load calendar items.'))
+        } catch {
+            setNotice(t('calendar.error.load'))
         } finally {
             setIsLoading(false)
         }
-    }, [])
+    }, [t])
 
     useEffect(() => {
         void refreshItems()
@@ -53,11 +52,11 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }): R
         try {
             const result = await window.context.extractCalendarForBlock(blockId)
             setItems(result.items)
-            setNotice(result.warning ?? null)
-        } catch (error) {
-            setNotice(errorText(error, 'Could not update the calendar from this note.'))
+            setNotice(result.warning ? t('calendar.warning.deterministic') : null)
+        } catch {
+            setNotice(t('calendar.error.updateFromNote'))
         }
-    }, [])
+    }, [t])
 
     const validateItem = useCallback(async (id: string): Promise<boolean> => {
         const updated = await window.context.validateCalendarItem(id)
@@ -113,33 +112,33 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }): R
             await window.context.configureGoogleCalendar(clientId, clientSecret)
             await updateSettings({})
             return { ok: true }
-        } catch (error) {
-            return { ok: false, error: errorText(error, 'Could not save Google OAuth configuration.') }
+        } catch {
+            return { ok: false, error: t('settings.error.googleConfig') }
         }
-    }, [updateSettings])
+    }, [t, updateSettings])
 
     const connectGoogle = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
         try {
             const result = await window.context.connectGoogleCalendar()
             await updateSettings({})
             return result.ok ? { ok: true } : { ok: false, error: result.error }
-        } catch (error) {
-            return { ok: false, error: errorText(error, 'Could not connect Google Calendar.') }
+        } catch {
+            return { ok: false, error: t('settings.error.googleConnect') }
         }
-    }, [updateSettings])
+    }, [t, updateSettings])
 
     const disconnectGoogle = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
         try {
             const result = await window.context.disconnectGoogleCalendar()
             await updateSettings({})
             return { ok: result.ok, ...(result.error ? { error: result.error } : {}) }
-        } catch (error) {
-            return { ok: false, error: errorText(error, 'Could not disconnect Google Calendar.') }
+        } catch {
+            return { ok: false, error: t('settings.error.googleDisconnect') }
         }
-    }, [updateSettings])
+    }, [t, updateSettings])
 
     const syncGoogleNow = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
-        if (isSyncingRef.current) return { ok: false, error: 'A Google Calendar sync is already running.' }
+        if (isSyncingRef.current) return { ok: false, error: t('settings.error.googleSyncRunning') }
         isSyncingRef.current = true
         setIsSyncing(true)
         try {
@@ -148,15 +147,15 @@ export const CalendarProvider = ({ children }: { children: React.ReactNode }): R
             setNotice(result.error ?? null)
             await updateSettings({})
             return result.ok ? { ok: true } : { ok: false, error: result.error }
-        } catch (error) {
-            const message = errorText(error, 'Google Calendar sync failed.')
+        } catch {
+            const message = t('settings.error.googleSync')
             setNotice(message)
             return { ok: false, error: message }
         } finally {
             isSyncingRef.current = false
             setIsSyncing(false)
         }
-    }, [updateSettings])
+    }, [t, updateSettings])
 
     useEffect(() => {
         const googleSettings = settings.googleCalendar

@@ -8,19 +8,20 @@ import { useImageRecognition } from '@renderer/hooks/useImageRecognition'
 import { MarkdownFormat, useQuickInput } from '@renderer/hooks/useQuickInput'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
 import { useTranscriptPolish } from '@renderer/hooks/useTranscriptPolish'
-import { useBlockActions, useBlocks, useGoals, useSettings } from '@renderer/context'
+import { useBlockActions, useBlocks, useGoals, useI18n, useSettings } from '@renderer/context'
+import type { TranslationKey } from '@renderer/i18n'
 import { blockLabel, cn } from '@renderer/utils'
 import { isImageRecognitionReady, isLlmSelectionVerified } from '@shared/llmSettings'
 import { ComponentProps, JSX, useCallback, useEffect } from 'react'
 import { IconType } from 'react-icons'
 import { LuBold, LuCheck, LuCode, LuHeading2, LuItalic, LuList, LuSend } from 'react-icons/lu'
 
-const formatButtons: { format: MarkdownFormat; title: string; Icon: IconType }[] = [
-  { format: 'heading', title: 'Heading', Icon: LuHeading2 },
-  { format: 'bold', title: 'Bold', Icon: LuBold },
-  { format: 'italic', title: 'Italic', Icon: LuItalic },
-  { format: 'list', title: 'List', Icon: LuList },
-  { format: 'code', title: 'Code', Icon: LuCode }
+const formatButtons: { format: MarkdownFormat; titleKey: TranslationKey; Icon: IconType }[] = [
+  { format: 'heading', titleKey: 'capture.heading', Icon: LuHeading2 },
+  { format: 'bold', titleKey: 'capture.bold', Icon: LuBold },
+  { format: 'italic', titleKey: 'capture.italic', Icon: LuItalic },
+  { format: 'list', titleKey: 'capture.list', Icon: LuList },
+  { format: 'code', titleKey: 'capture.code', Icon: LuCode }
 ]
 
 export type CaptureBarProps = ComponentProps<'form'>
@@ -36,6 +37,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   const { settings } = useSettings()
   const { closeOpenBlock } = useBlockActions()
   const { selectedCategory } = useGoals()
+  const { t } = useI18n()
   const isEditingBlock = selectedBlockId !== null
 
   const focusCaptureInput = useCallback((): void => {
@@ -121,8 +123,8 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
   const pendingBlockSeparatorChars = appendTargetContentChars > 0 ? 2 : 0
 
   const statusMessage = recognitionError ?? (isRecognizing
-    ? 'Recognizing image text...'
-    : polishError ?? (isPolishing ? 'Polishing transcript...' : error ?? notice))
+    ? t('capture.recognizingImageText')
+    : polishError ?? (isPolishing ? t('capture.polishingTranscript') : error ?? notice))
   const hasStatusError = recognitionError !== null || polishError !== null || error !== null
 
   return (
@@ -146,14 +148,14 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
             appendTarget ? 'text-yellow-600/80' : 'text-zinc-500'
           )}
         >
-          {appendTarget ? blockLabel(appendTarget, settings.llm.aiBlockNameSummary) : 'new'}
+          {appendTarget ? blockLabel(appendTarget, settings.llm.aiBlockNameSummary) : t('capture.newBlock')}
         </legend>
         <div data-tour="capture-tools" className="flex items-center gap-0.5 px-2 pt-0.5">
-          {formatButtons.map(({ format, title, Icon }) => (
+          {formatButtons.map(({ format, titleKey, Icon }) => (
             <button
               key={format}
               type="button"
-              title={title}
+              title={t(titleKey)}
               disabled={isEditingBlock}
               onClick={() => applyFormat(format)}
               className="rounded p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-600/50 transition-colors duration-100"
@@ -165,7 +167,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
             isListening={isListening}
             isAvailable={isAvailable}
             disabled={isEditingBlock}
-            title={dictationTitle(dictationMode, isListening)}
+            title={dictationTitle(dictationMode, isListening, t)}
             onClick={handleDictationClick}
           />
           <ImageRecognitionButton
@@ -182,7 +184,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
           <span className="flex-1" />
           <button
             type="submit"
-            title="Send"
+            title={t('common.send')}
             disabled={isEditingBlock || isSubmitting || text.trim().length === 0}
             className="rounded p-1.5 text-zinc-300 hover:bg-zinc-600/50 transition-colors duration-100 disabled:opacity-40 disabled:hover:bg-transparent"
           >
@@ -190,10 +192,10 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
           </button>
         </div>
         {(isListening && interimText) || statusMessage ? (
-          <div className="flex items-center gap-2 px-3 pt-0.5 text-xs" aria-live="polite">
-            <span className={cn(hasStatusError ? 'text-red-400/90' : notice || isPolishing || isRecognizing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage ?? interimText}</span>
-            {recognitionError && hasPendingImage && <button type="button" onClick={retryRecognition} disabled={isRecognizing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button>}
-            {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">Use original</button></>}
+          <div className="flex items-center gap-2 px-3 pt-0.5 text-xs" aria-live="polite" role={hasStatusError ? 'alert' : undefined}>
+            <span title={statusMessage ?? interimText} className={cn(hasStatusError ? 'text-red-400/90' : notice || isPolishing || isRecognizing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage ?? interimText}</span>
+            {recognitionError && hasPendingImage && <button type="button" onClick={retryRecognition} disabled={isRecognizing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">{t('common.retry')}</button>}
+            {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">{t('common.retry')}</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">{t('common.useOriginal')}</button></>}
           </div>
         ) : null}
         <textarea
@@ -204,7 +206,7 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
           disabled={isEditingBlock}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? 'Listening…' : 'Jot something down...'}
+          placeholder={isListening ? t('capture.listening') : t('capture.placeholder')}
           className="block w-full resize-y min-h-12 max-h-48 bg-transparent px-3 pb-1 text-sm outline-none caret-yellow-500 placeholder:text-zinc-500"
         />
         {/* Manual finalize: closes the open block without touching the
@@ -212,13 +214,13 @@ export const CaptureBar = ({ className, ...props }: CaptureBarProps): JSX.Elemen
         <div className="flex justify-end px-2 pb-1.5">
           <button
             type="button"
-            title={appendTarget ? 'Close the open block' : 'No open block in this view'}
+            title={appendTarget ? t('capture.closeOpenBlock') : t('capture.noOpenBlock')}
             disabled={isEditingBlock || !appendTarget}
             onClick={closeOpenBlock}
             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-zinc-400 transition-colors duration-100 hover:bg-zinc-600/50 hover:text-zinc-200 disabled:opacity-40 disabled:hover:bg-transparent"
           >
             <LuCheck className="h-3.5 w-3.5" />
-            Close block
+            {t('capture.closeBlockLabel')}
           </button>
         </div>
       </fieldset>

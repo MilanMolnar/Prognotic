@@ -13,6 +13,7 @@ import { readSse } from './streamParser'
 import { researchWeb } from './webResearch'
 import { buildPluginAiMessages } from './pluginPrompt'
 import { buildAssistantSystemPrompt } from './assistantPrompt'
+import { uiLocaleEnglishName } from '@shared/locales'
 import { buildImageRecognitionPrompt } from './imageRecognition'
 import { maxDocumentSummaryOutputChars, truncateDocumentText } from '@shared/documents'
 import { buildDocumentSummaryRequest } from './documentSummary'
@@ -384,7 +385,7 @@ export const buildNotesContext = async (
     signal = new AbortController().signal
 ): Promise<{ prompt: string; citedIds: string[]; citedBlockCategoryIds: Record<string, string | null>; readGoalLabels: string[] }> => {
     const activeSelection = await resolveSelection(selection)
-    const [blocks, goals] = await Promise.all([getBlocks(), getGoals()])
+    const [blocks, goals, settings] = await Promise.all([getBlocks(), getGoals(), getSettings()])
     const resolvedGoals = await resolveGoalScope(message, scope, activeSelection, signal)
     const blocksById = new Map(blocks.map((block) => [block.id, block]))
     // Explicit attachments are user-selected context: keep their complete
@@ -445,7 +446,14 @@ export const buildNotesContext = async (
         citedIds,
         citedBlockCategoryIds,
         readGoalLabels: resolvedGoals.readGoalLabels,
-        prompt: buildAssistantSystemPrompt(scope.mode, disclosure, goalContext, excerpts.join('\n\n'), attachedNotesContext)
+        prompt: buildAssistantSystemPrompt(
+            scope.mode,
+            disclosure,
+            goalContext,
+            excerpts.join('\n\n'),
+            attachedNotesContext,
+            uiLocaleEnglishName(settings.uiLocale)
+        )
     }
 }
 

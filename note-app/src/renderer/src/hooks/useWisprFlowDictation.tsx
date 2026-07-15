@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useI18n } from '@renderer/context'
+import type { TranslationKey } from '@renderer/i18n'
+import type { TranscriptionErrorCode } from '@shared/types'
 
 export type UseWisprFlowDictationParams = {
     onFinalTranscript: (text: string) => void
@@ -17,6 +20,16 @@ export type UseWisprFlowDictationResult = {
 }
 
 const preferredMimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+
+const transcriptionErrorKeys: Record<TranscriptionErrorCode, TranslationKey> = {
+    'invalid-audio': 'capture.invalidAudio',
+    'no-audio': 'capture.noAudio',
+    'too-long': 'capture.tooLong',
+    'key-required': 'capture.wisprKeyRequired',
+    'key-rejected': 'capture.wisprKeyRejected',
+    failed: 'capture.transcriptionFailed',
+    unreachable: 'capture.wisprUnreachable'
+}
 
 const pickMimeType = (): string | undefined =>
     preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type))
@@ -81,6 +94,7 @@ export const useWisprFlowDictation = ({
     onFinalTranscript,
     hasApiKey
 }: UseWisprFlowDictationParams): UseWisprFlowDictationResult => {
+    const { t } = useI18n()
     const [isListening, setIsListening] = useState(false)
     const [isTranscribing, setIsTranscribing] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -109,26 +123,26 @@ export const useWisprFlowDictation = ({
             const wav = await toWav16kMono(blob)
             const result = await window.context.transcribeAudio(wav)
             if (result.error !== undefined) {
-                setError(result.error)
+                setError(t(result.code ? transcriptionErrorKeys[result.code] : 'capture.transcriptionFailed'))
                 return
             }
             const text = result.text.trim()
             if (!text) {
-                setError('No speech detected.')
+                setError(t('capture.noSpeech'))
                 return
             }
             onFinalRef.current(text)
         } catch {
-            setError('Could not process the recording.')
+            setError(t('capture.recordingFailed'))
         } finally {
             setIsTranscribing(false)
         }
-    }, [])
+    }, [t])
 
     const start = useCallback((): void => {
         setError(null)
         if (!hasApiKey) {
-            setError('Add your Wispr Flow API key in Settings to use Wispr Flow dictation.')
+            setError(t('capture.wisprKeyRequired'))
             return
         }
 
@@ -155,9 +169,9 @@ export const useWisprFlowDictation = ({
                 setIsListening(true)
             })
             .catch(() => {
-                setError('Microphone access was denied.')
+                setError(t('capture.microphoneDenied'))
             })
-    }, [hasApiKey, transcribe])
+    }, [hasApiKey, t, transcribe])
 
     const stop = useCallback((): void => {
         const recorder = recorderRef.current

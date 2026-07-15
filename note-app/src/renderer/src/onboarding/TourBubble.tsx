@@ -1,7 +1,8 @@
 import { cn } from '@renderer/utils'
 import { forwardRef, JSX } from 'react'
 import { useOnboarding, useOnboardingActions } from '@renderer/context/OnboardingContext'
-import { resolveTourCopy } from './tourLogic'
+import { useI18n } from '@renderer/context/I18nContext'
+import { localizeTourChoice, localizeTourLink, localizeTourStep } from './tourTranslations'
 import type { BubblePosition } from './tourPosition'
 
 export type TourBubbleProps = {
@@ -30,21 +31,21 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
       persistenceError
     } = useOnboarding()
     const { nextStep, previousStep, continueAnyway, choose, skipTour } = useOnboardingActions()
+    const { formatNumber, t } = useI18n()
     if (!currentStep) return null
 
-    const title = resolveTourCopy(currentStep.title, runtime)
-    const body = resolveTourCopy(currentStep.body, runtime)
+    const localized = localizeTourStep(currentStep, runtime, t)
     const link = typeof currentStep.externalLink === 'function'
       ? currentStep.externalLink(runtime)
       : currentStep.externalLink
     const canUseNext = currentStep.advance === 'next' && gateSatisfied
     const isWaitingForTarget = currentStep.target !== undefined && !targetFound
     const gateHint = currentStep.advance === 'click-target'
-      ? 'Use the highlighted control to continue.'
+      ? t('onboarding.useHighlighted')
       : currentStep.advance === 'event'
-        ? 'Complete the highlighted action to continue.'
+        ? t('onboarding.completeHighlighted')
         : currentStep.interactive && !gateSatisfied
-          ? 'Complete this step to continue.'
+          ? t('onboarding.completeStep')
           : null
 
     return (
@@ -52,28 +53,28 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
         ref={ref}
         role="dialog"
         aria-modal="false"
-        aria-label={title || currentStep.section}
+        aria-label={localized.title || localized.section}
         className="fixed z-[6002] max-h-[calc(100vh-24px)] w-[min(360px,calc(100vw-24px))] overflow-y-auto rounded-md border border-yellow-500/60 bg-zinc-900 p-4 text-sm text-zinc-200 shadow-2xl"
         style={{ top: position.top, left: position.left }}
       >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-wider text-yellow-500/80">
-              {currentStep.section} · {stepNumber || '–'}/{totalSteps}
+              {localized.section} · {stepNumber ? formatNumber(stepNumber) : '–'}/{formatNumber(totalSteps)}
             </p>
-            {title && <h2 className="mt-1 font-semibold text-zinc-100">{title}</h2>}
+            {localized.title && <h2 className="mt-1 font-semibold text-zinc-100">{localized.title}</h2>}
           </div>
           <button
             type="button"
             onClick={() => { void skipTour() }}
             className="shrink-0 text-xs text-zinc-500 hover:text-zinc-200"
           >
-            Skip tour
+            {t('onboarding.skip')}
           </button>
         </div>
-        <p className="mt-2 leading-relaxed text-zinc-300">{body}</p>
+        <p className="mt-2 leading-relaxed text-zinc-300">{localized.body}</p>
         {isWaitingForTarget && (
-          <p className="mt-2 text-xs text-zinc-500">Waiting for this control to appear…</p>
+          <p className="mt-2 text-xs text-zinc-500">{t('onboarding.waiting')}</p>
         )}
         {gateHint && <p className="mt-2 text-xs text-yellow-500/70">{gateHint}</p>}
         {link && safeExternalLink(link.href) && (
@@ -83,7 +84,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
             rel="noreferrer"
             className="mt-3 inline-flex rounded-md border border-zinc-500/60 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-700/70"
           >
-            {link.label}
+            {localizeTourLink(runtime.selectedProvider, link.label, t)}
           </a>
         )}
         {persistenceError && <p className="mt-2 text-xs text-red-400" role="alert">{persistenceError}</p>}
@@ -92,7 +93,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             {canGoBack && (
               <button type="button" onClick={previousStep} className="mr-auto rounded-md border border-zinc-600 px-2 py-1 text-xs hover:bg-zinc-700">
-                Back
+                {t('common.back')}
               </button>
             )}
             {currentStep.choices.map((choice) => (
@@ -107,7 +108,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
                     : 'border-zinc-600 text-zinc-300 hover:bg-zinc-700'
                 )}
               >
-                {choice.label}
+                {localizeTourChoice(choice.id, choice.label, t)}
               </button>
             ))}
           </div>
@@ -119,7 +120,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
               onClick={previousStep}
               className="rounded-md border border-zinc-600 px-2 py-1 text-xs hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
             >
-              Back
+              {t('common.back')}
             </button>
             {currentStep.secondaryActions?.map((action) => (
               <button
@@ -128,7 +129,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
                 onClick={() => choose(action.id)}
                 className="rounded-md border border-zinc-600 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
               >
-                {action.label}
+                {localizeTourChoice(action.id, action.label, t)}
               </button>
             ))}
             <span className="min-w-0 flex-1" />
@@ -138,7 +139,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
                 onClick={continueAnyway}
                 className="rounded-md border border-zinc-600 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
               >
-                Continue anyway
+                {t('onboarding.continueAnyway')}
               </button>
             )}
             <button
@@ -147,7 +148,7 @@ export const TourBubble = forwardRef<HTMLDivElement, TourBubbleProps>(
               onClick={nextStep}
               className="rounded-md border border-yellow-500/60 px-2.5 py-1.5 text-xs text-yellow-200 hover:bg-yellow-500/15 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:text-zinc-600 disabled:hover:bg-transparent"
             >
-              {currentStep.primaryLabel ?? 'Next'}
+              {localized.primaryLabel}
             </button>
           </div>
         )}

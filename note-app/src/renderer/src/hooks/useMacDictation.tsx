@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useI18n } from '@renderer/context'
 
 export type UseMacDictationParams = {
     focusInput?: () => void
@@ -13,7 +14,7 @@ export type UseMacDictationResult = {
 }
 
 const focusDelayMs = 50
-const noticeDurationMs = 3500
+const noticeDurationMs = 8000
 
 // macOS Dictation types directly into the focused field after main sends
 // Fn-D. macOS exposes no transcript or reliable active-state API here, so
@@ -21,6 +22,7 @@ const noticeDurationMs = 3500
 export const useMacDictation = ({
     focusInput
 }: UseMacDictationParams): UseMacDictationResult => {
+    const { t } = useI18n()
     const isAvailable = window.context.platform === 'darwin'
 
     const [error, setError] = useState<string | null>(null)
@@ -50,7 +52,7 @@ export const useMacDictation = ({
 
     const open = useCallback((): void => {
         if (!isAvailable) {
-            setError('macOS dictation is only available on macOS.')
+            setError(t('capture.macosOnly'))
             return
         }
         setError(null)
@@ -60,15 +62,15 @@ export const useMacDictation = ({
             try {
                 const result = await window.context.toggleMacDictation()
                 if (!result.ok) {
-                    setError(result.error ?? 'macOS dictation failed.')
+                    setError(t('capture.macosFailed'))
                     return
                 }
-                showNotice('Listening...')
+                showNotice(t('capture.macosNotice'))
             } catch {
-                setError('macOS dictation failed.')
+                setError(t('capture.macosRequestFailed'))
             }
         })()
-    }, [isAvailable, focusInput, showNotice])
+    }, [isAvailable, focusInput, showNotice, t])
 
     // No-op: the operating system owns the Dictation session.
     const stop = useCallback((): void => undefined, [])

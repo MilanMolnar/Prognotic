@@ -1,5 +1,5 @@
 import { BlockFeed, MarkdownEditor, NaturalCapturePanel } from '@/components'
-import { useBlockActions, useBlocks, useSearch, useSettings } from '@renderer/context'
+import { useBlockActions, useBlocks, useI18n, useSearch, useSettings } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import { ComponentProps, JSX, useEffect, useRef } from 'react'
 import { LuX } from 'react-icons/lu'
@@ -14,6 +14,7 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
   const { selectBlock } = useBlockActions()
   const { isSearchOpen, query } = useSearch()
   const { settings } = useSettings()
+  const { t } = useI18n()
 
   // In-editor find: paints every case-insensitive occurrence of the query
   // inside the open block via the CSS Custom Highlight API — no DOM
@@ -93,7 +94,7 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
     >
       <button
         onClick={() => selectBlock(null)}
-        title="Back to feed"
+        title={t('block.backToFeed')}
         className="absolute right-2 top-1 z-10 rounded-md p-1.5 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10 transition-colors duration-100"
       >
         <LuX className="w-6 h-6" />
@@ -102,7 +103,7 @@ export const BlockPanel = ({ className, ...props }: BlockPanelProps): JSX.Elemen
         {selectedBlock ? (
           <MarkdownEditor />
         ) : (
-          <div className="text-sm text-center text-zinc-500 mt-5">Loading...</div>
+          <div className="text-sm text-center text-zinc-500 mt-5">{t('common.loading')}</div>
         )}
       </div>
     </div>

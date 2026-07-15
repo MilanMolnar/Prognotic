@@ -1,4 +1,4 @@
-import { ActionButton, GoalContextMenu, GoalDialog, NewGoalButton, SettingsButton } from '@/components'
+import { ActionButton, ExperimentalBadge, GoalContextMenu, GoalDialog, NewGoalButton, SettingsButton } from '@/components'
 import {
   CategoryKey,
   useBlockActions,
@@ -8,6 +8,7 @@ import {
   useCalendarActions,
   useGoalActions,
   useGoals,
+  useI18n,
   usePanelActions,
   usePanels,
   usePlugins,
@@ -33,12 +34,13 @@ import {
   useRef,
   useState
 } from 'react'
-import { LuBookOpen, LuCalendarDays, LuHeartPulse, LuLeaf, LuPanelLeftClose, LuPin, LuPuzzle, LuSearch, LuSparkles, LuStickyNote, LuUtensils } from 'react-icons/lu'
+import { LuBookMarked, LuBookOpen, LuCalendarDays, LuHeartPulse, LuLeaf, LuPanelLeftClose, LuPin, LuPuzzle, LuSearch, LuSparkles, LuStickyNote, LuUtensils } from 'react-icons/lu'
 
 const categoryId = (key: CategoryKey): string => key ?? 'quick-notes'
 const pluginRowId = (pluginId: string): string => `plugin-row:${pluginId}`
 const goalSearchId = '__goal-search__'
 const calendarRowId = '__calendar__'
+const glossaryRowId = '__glossary__'
 
 const goalRowClass =
   'flex h-9 items-center rounded-md border border-transparent px-2.5 text-sm transition-colors duration-75'
@@ -118,7 +120,7 @@ const SystemItem = ({ label, onClick, itemRef, categoryRowId, tourId, leading, t
 
 const systemGoalIconClass = 'h-4 w-4 shrink-0 text-zinc-400'
 
-const SectionLabel = ({ children }: { children: string }): JSX.Element => (
+const SectionLabel = ({ children }: { children: ReactNode }): JSX.Element => (
   <div className="relative z-10 mb-1 mt-3 px-2.5 text-xs uppercase tracking-wide text-zinc-500">{children}</div>
 )
 
@@ -136,10 +138,10 @@ const PluginIcon = ({ name }: { name?: string }): JSX.Element => {
 }
 
 export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>): JSX.Element => {
-  const { goals, selectedCategory, selectedPluginId, isCalendarSelected } = useGoals()
+  const { goals, selectedCategory, selectedPluginId, isCalendarSelected, isGlossarySelected } = useGoals()
   const { plugins } = usePlugins()
   const { blocks } = useBlocks()
-  const { selectCategory, selectPlugin, selectCalendar, deleteGoal } = useGoalActions()
+  const { selectCategory, selectPlugin, selectCalendar, selectGlossary, deleteGoal } = useGoalActions()
   const { selectBlock } = useBlockActions()
   const { closeSearch } = useSearchActions()
   const { toggleLeftPanel } = usePanelActions()
@@ -149,6 +151,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const { activeDrag } = useBlockDrag()
   const { items: calendarItems } = useCalendar()
   const { openResolutionQueue } = useCalendarActions()
+  const { formatNumber, t } = useI18n()
   const [search, setSearch] = useState('')
   const [isGoalSearchOpen, setIsGoalSearchOpen] = useState(false)
   const [contextGoal, setContextGoal] = useState<{ goal: Goal; position: { x: number; y: number } } | null>(null)
@@ -187,12 +190,19 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     else itemRefs.current.delete(calendarRowId)
   }, [])
 
+  const registerGlossaryRef = useCallback((element: HTMLElement | null) => {
+    if (element) itemRefs.current.set(glossaryRowId, element)
+    else itemRefs.current.delete(glossaryRowId)
+  }, [])
+
   const updateIndicator = useCallback((): void => {
     const container = listContainerRef.current
     const activeId = isGoalSearchOpen
       ? goalSearchId
       : isCalendarSelected
         ? calendarRowId
+      : isGlossarySelected
+        ? glossaryRowId
       : selectedPluginId
         ? pluginRowId(selectedPluginId)
         : categoryId(selectedCategory)
@@ -212,7 +222,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
       height: itemRect.height,
       visible: true
     })
-  }, [isGoalSearchOpen, isCalendarSelected, selectedCategory, selectedPluginId])
+  }, [isGoalSearchOpen, isCalendarSelected, isGlossarySelected, selectedCategory, selectedPluginId])
 
   const pinnedIds = settings.pinnedGoalIds
   const canPinMore = pinnedIds.length < maxPinnedGoals
@@ -249,23 +259,28 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
   const counterFor = (goalId: string): ReactNode => {
     const count = unvisitedCounts.get(goalId) ?? 0
     if (count === 0) return undefined
+    const countLabel = count === 1
+      ? t('navigation.unvisitedCountOne')
+      : t('navigation.unvisitedCount', { count: formatNumber(count) })
     return <button
       type="button"
-      title={`${count} unvisited ${count === 1 ? 'note' : 'notes'}`}
-      aria-label={`${count} unvisited ${count === 1 ? 'note' : 'notes'}`}
+      title={countLabel}
+      aria-label={countLabel}
       onClick={(event) => event.stopPropagation()}
       className="min-w-5 shrink-0 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-center text-[10px] font-medium leading-none text-yellow-400"
     >
-      {count}
+      {formatNumber(count)}
     </button>
   }
 
   const pluginCounter = (count: number): ReactNode => count > 0 ? (
     <span
-      title={`${count} ${count === 1 ? 'entry needs' : 'entries need'} review`}
+      title={count === 1
+        ? t('navigation.pluginReviewCountOne')
+        : t('navigation.pluginReviewCount', { count: formatNumber(count) })}
       className="min-w-5 shrink-0 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-center text-[10px] font-medium leading-none text-yellow-400"
     >
-      {count}
+      {formatNumber(count)}
     </span>
   ) : undefined
 
@@ -338,6 +353,13 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     closeGoalSearch()
   }
 
+  const handleGlossarySelect = (): void => {
+    selectGlossary()
+    selectBlock(null)
+    closeSearch()
+    closeGoalSearch()
+  }
+
   const handlePinClick = (goalId: string) => (event: MouseEvent): void => {
     event.stopPropagation()
     void togglePinGoal(goalId)
@@ -352,7 +374,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
     if (!contextGoal) return
     const { goal } = contextGoal
     setContextGoal(null)
-    if (!window.confirm(`Delete the goal "${goal.name}"? Blocks keep their other categories; uncategorized blocks return to Quick Notes.`)) return
+    if (!window.confirm(t('navigation.deleteGoalConfirm', { goal: goal.name }))) return
     await deleteGoal(goal.id)
   }
 
@@ -391,7 +413,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             >
               <button
                 type="button"
-                title="Close search"
+                title={t('search.close')}
                 onClick={toggleGoalSearch}
                 className="flex h-full shrink-0 items-center justify-center px-2.5 hover:bg-zinc-600/50"
               >
@@ -403,14 +425,14 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Search goals..."
+                placeholder={t('navigation.searchGoalsPlaceholder')}
                 className="min-w-0 flex-1 bg-transparent pr-2.5 text-sm outline-none caret-yellow-500 placeholder:text-zinc-500"
               />
             </div>
           ) : (
             <button
               type="button"
-              title="Search goals"
+              title={t('navigation.searchGoals')}
               onClick={toggleGoalSearch}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-400/50 hover:bg-zinc-600/50"
             >
@@ -422,7 +444,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
 
         <ul className="space-y-1">
           <SystemItem
-            label="Quick Note"
+            label={t('navigation.quickNotes')}
             itemRef={registerItemRef(null)}
             categoryRowId={categoryId(null)}
             tourId="quick-notes-goal"
@@ -431,7 +453,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             leading={<LuStickyNote className={systemGoalIconClass} aria-hidden />}
           />
           <SystemItem
-            label="Research"
+            label={t('navigation.research')}
             itemRef={registerItemRef(researchCategory)}
             categoryRowId={categoryId(researchCategory)}
             tourId="research-goal"
@@ -440,7 +462,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
             leading={<LuBookOpen className={systemGoalIconClass} aria-hidden />}
           />
           <SystemItem
-            label="Calendar"
+            label={t('navigation.calendar')}
             itemRef={registerCalendarRef}
             categoryRowId={calendarRowId}
             onClick={handleCalendarSelect}
@@ -449,17 +471,19 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               <span className="flex shrink-0 items-center gap-1">
                 {pendingCalendarCount > 0 && (
                   <span
-                    title={`${pendingCalendarCount} ${pendingCalendarCount === 1 ? 'item needs' : 'items need'} validation`}
+                    title={pendingCalendarCount === 1
+                      ? t('navigation.calendarValidationCountOne')
+                      : t('navigation.calendarValidationCount', { count: formatNumber(pendingCalendarCount) })}
                     className="min-w-5 rounded-full border border-emerald-500/50 bg-emerald-500/10 px-1.5 py-0.5 text-center text-[10px] font-medium leading-none text-emerald-400"
                   >
-                    {pendingCalendarCount}
+                    {formatNumber(pendingCalendarCount)}
                   </span>
                 )}
                 {hasUncertainCalendar && (
                   <button
                     type="button"
-                    title="Resolve uncertain calendar items"
-                    aria-label="Resolve uncertain calendar items"
+                    title={t('calendar.resolveUncertain')}
+                    aria-label={t('calendar.resolveUncertain')}
                     onClick={(event) => {
                       event.stopPropagation()
                       handleCalendarSelect()
@@ -473,11 +497,18 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               </span>
             ) : undefined}
           />
+          <SystemItem
+            label={t('navigation.glossary')}
+            itemRef={registerGlossaryRef}
+            categoryRowId={glossaryRowId}
+            onClick={handleGlossarySelect}
+            leading={<LuBookMarked className={systemGoalIconClass} aria-hidden />}
+          />
         </ul>
 
         {enabledPlugins.length > 0 && (
           <>
-            <SectionLabel>Plugins</SectionLabel>
+            <SectionLabel><span className="flex items-center gap-1.5">{t('navigation.plugins')} <ExperimentalBadge /></span></SectionLabel>
             <ul className="space-y-1">
               {enabledPlugins.map((plugin) => (
                 <SelectableItem
@@ -488,7 +519,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                   onClick={handlePluginSelect(plugin.id)}
                   leading={<PluginIcon name={plugin.sidebar?.icon} />}
                   labelBadge={plugin.aiGenerated ? (
-                    <span title="Created with AI" aria-label="Created with AI" className="shrink-0 text-violet-300">
+                    <span title={t('navigation.createdWithAi')} aria-label={t('navigation.createdWithAi')} className="shrink-0 text-violet-300">
                       <LuSparkles className="h-3 w-3" aria-hidden />
                     </span>
                   ) : undefined}
@@ -501,7 +532,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
 
         {pinnedGoals.length > 0 && (
           <>
-            <SectionLabel>Pinned</SectionLabel>
+            <SectionLabel>{t('navigation.pinned')}</SectionLabel>
             <ul className="space-y-1">
               {pinnedGoals.map((goal) => (
                 <SelectableItem
@@ -516,7 +547,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
                   leading={
                     <button
                       type="button"
-                      title="Unpin goal"
+                      title={t('navigation.unpinGoal')}
                       onClick={handlePinClick(goal.id)}
                       className="shrink-0 rounded p-0.5 hover:bg-zinc-600/50"
                     >
@@ -530,7 +561,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
           </>
         )}
 
-        <SectionLabel>Goals</SectionLabel>
+        <SectionLabel>{t('navigation.goals')}</SectionLabel>
         <ul className="space-y-1">
           {visibleUnpinnedGoals.map((goal) => (
             <SelectableItem
@@ -545,7 +576,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
               leading={
                 <button
                   type="button"
-                  title={canPinMore ? 'Pin goal' : `Pin limit reached (${maxPinnedGoals})`}
+                  title={canPinMore ? t('navigation.pinGoal') : t('navigation.pinLimit', { count: maxPinnedGoals })}
                   disabled={!canPinMore}
                   onClick={handlePinClick(goal.id)}
                   className="shrink-0 rounded p-0.5 hover:bg-zinc-600/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
@@ -558,9 +589,9 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
           ))}
           {goals && visibleUnpinnedGoals.length === 0 && (
             <li className="px-2.5 text-sm text-zinc-500">
-              {trimmedSearch ? 'No matching goals' : unpinnedGoals.length === 0 && pinnedGoals.length > 0
-                ? 'All goals are pinned'
-                : 'No goals yet — add one with +'}
+              {trimmedSearch ? t('navigation.noMatchingGoals') : unpinnedGoals.length === 0 && pinnedGoals.length > 0
+                ? t('navigation.allGoalsPinned')
+                : t('navigation.noGoals')}
             </li>
           )}
         </ul>
@@ -570,7 +601,7 @@ export const CategorySidebar = ({ className, ...props }: ComponentProps<'div'>):
         <SettingsButton />
         <ActionButton
           onClick={toggleLeftPanel}
-          title="Collapse sidebar"
+          title={t('navigation.collapseSidebar')}
           className="border-yellow-500/50 hover:bg-yellow-500/10"
         >
           <LuPanelLeftClose className="h-4 w-4 text-yellow-500" />

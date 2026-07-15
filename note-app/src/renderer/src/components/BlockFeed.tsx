@@ -2,7 +2,7 @@ import { BlockCard } from '@/components'
 import { useBlockFeed } from '@renderer/hooks/useBlockFeed'
 import { cn } from '@renderer/utils'
 import { becameAppliedRouting } from '@renderer/utils/routing'
-import { useBlocks, useGoals } from '@renderer/context'
+import { useBlocks, useGoals, useI18n } from '@renderer/context'
 import { isEmpty } from 'lodash'
 import { ComponentProps, JSX, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 
@@ -20,6 +20,7 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
   } = useBlockFeed()
   const { selectedCategory } = useGoals()
   const { assistantFocus, selectedBlockId } = useBlocks()
+  const { t } = useI18n()
 
   // Keep the newest text visible next to the capture bar (chat-style);
   // while searching the best match sits at the top instead. blockContents is
@@ -94,7 +95,7 @@ export const BlockFeed = ({ className, ...props }: BlockFeedProps): JSX.Element 
     <div data-tour="block-feed" ref={scrollRef} className={cn('overflow-y-auto', className)} {...props}>
       {isEmpty(feedBlocks) ? (
         <div className="text-sm text-center text-zinc-500 mt-5">
-          Nothing captured here yet — write something below!
+          {t('block.emptyCapture')}
         </div>
       ) : (
         <ul className="space-y-3">

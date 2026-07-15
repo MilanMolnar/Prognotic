@@ -1,9 +1,11 @@
 import {ActionButton, ActionButtonProps, SettingsModal} from "@/components";
 import { onboardingEvents } from '@renderer/onboarding/events'
+import { useI18n } from '@renderer/context'
 import { JSX, useEffect, useState } from "react";
 import {LuSettings} from "react-icons/lu"
 
 export const SettingsButton = ({...props}: ActionButtonProps): JSX.Element => {
+    const { t } = useI18n()
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {
@@ -14,7 +16,7 @@ export const SettingsButton = ({...props}: ActionButtonProps): JSX.Element => {
 
     return (
         <>
-            <ActionButton data-tour="settings" onClick={() => setIsOpen(true)} {...props}>
+            <ActionButton data-tour="settings" title={t('navigation.settings')} onClick={() => setIsOpen(true)} {...props}>
                 <LuSettings className="w-4 h-4 text-zinc-300" />
             </ActionButton>
             {isOpen && <SettingsModal onClose={() => setIsOpen(false)} />}

@@ -1,5 +1,5 @@
 import { BlockCard, NaturalCaptureEditor } from '@/components'
-import { useGoals } from '@renderer/context'
+import { useGoals, useI18n } from '@renderer/context'
 import { useBlockFeed } from '@renderer/hooks/useBlockFeed'
 import { cn } from '@renderer/utils'
 import { becameAppliedRouting } from '@renderer/utils/routing'
@@ -25,6 +25,7 @@ export const NaturalCapturePanel = ({
     handleBlockDelete
   } = useBlockFeed('desc')
   const { selectedCategory } = useGoals()
+  const { t } = useI18n()
 
   // Writing happens at the top — keep it in view on category change, and
   // surface the best match when searching.
@@ -90,7 +91,7 @@ export const NaturalCapturePanel = ({
       <div className="relative border-b border-white/10 pb-1">
         {openTarget && (
           <span
-            title="Capturing — writing keeps this block open"
+            title={t('block.capturing')}
             className="absolute right-1 top-1 z-10 inline-block h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
           />
         )}
@@ -102,7 +103,7 @@ export const NaturalCapturePanel = ({
             category={selectedCategory}
           />
         ) : (
-          <div className="px-1 py-2 text-sm text-zinc-500">Loading...</div>
+          <div className="px-1 py-2 text-sm text-zinc-500">{t('common.loading')}</div>
         )}
       </div>
       {closedBlocks.length > 0 && (

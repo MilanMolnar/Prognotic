@@ -3,7 +3,7 @@ import { useDocumentCapture } from '@renderer/hooks/useDocumentCapture'
 import { dictationTitle, useDictation } from '@renderer/hooks/useDictation'
 import { useNaturalCapture, UseNaturalCaptureParams } from '@renderer/hooks/useNaturalCapture'
 import { useImageRecognition } from '@renderer/hooks/useImageRecognition'
-import { useSettings } from '@renderer/context'
+import { useI18n, useSettings } from '@renderer/context'
 import { useTranscriptPolish } from '@renderer/hooks/useTranscriptPolish'
 import { cn } from '@renderer/utils'
 import { isImageRecognitionReady, isLlmSelectionVerified } from '@shared/llmSettings'
@@ -26,6 +26,7 @@ export type NaturalCaptureEditorProps = UseNaturalCaptureParams
 export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Element => {
   const { initialContent, editorRef, handleChange, appendTranscript, appendDocument, currentContentLength } = useNaturalCapture(props)
   const { settings } = useSettings()
+  const { t } = useI18n()
   const [isEmpty, setIsEmpty] = useState(() => initialContent.trim().length === 0)
 
   const handleEditorChange = useCallback(
@@ -113,8 +114,8 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
   }, [closeImageModal, openDocumentModal, stop])
 
   const statusMessage = recognitionError ?? (isRecognizing
-    ? 'Recognizing image text...'
-    : polishError ?? (isPolishing ? 'Polishing transcript...' : error ?? notice ?? (isListening && interimText ? interimText : null)))
+    ? t('capture.recognizingImageText')
+    : polishError ?? (isPolishing ? t('capture.polishingTranscript') : error ?? notice ?? (isListening && interimText ? interimText : null)))
   const hasStatusError = recognitionError !== null || polishError !== null || error !== null
 
   return (
@@ -131,16 +132,16 @@ export const NaturalCaptureEditor = (props: NaturalCaptureEditorProps): JSX.Elem
       </div>
       <div data-tour="capture-tools" className="flex shrink-0 items-center gap-2 pb-0.5">
         {statusMessage && (
-          <div className="flex items-center gap-1 text-xs" aria-live="polite">
-            <span className={cn('max-w-[10rem] truncate sm:max-w-[14rem]', hasStatusError ? 'text-red-400/90' : notice || isPolishing || isRecognizing ? 'text-zinc-500' : 'text-zinc-500 italic')}>{statusMessage}</span>
-            {recognitionError && hasPendingImage && <button type="button" onClick={retryRecognition} disabled={isRecognizing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button>}
-            {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">Retry</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">Use original</button></>}
+          <div className="flex items-center gap-1 text-xs" aria-live="polite" role={hasStatusError ? 'alert' : undefined}>
+            <span title={statusMessage} className={cn('max-w-[10rem] sm:max-w-[20rem]', hasStatusError ? 'whitespace-normal text-red-400/90' : notice || isPolishing || isRecognizing ? 'truncate text-zinc-500' : 'truncate text-zinc-500 italic')}>{statusMessage}</span>
+            {recognitionError && hasPendingImage && <button type="button" onClick={retryRecognition} disabled={isRecognizing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">{t('common.retry')}</button>}
+            {polishError && hasPendingTranscript && <><button type="button" onClick={retryPolish} disabled={isPolishing} className="rounded border border-red-400/40 px-1 py-0.5 text-red-300 disabled:opacity-40">{t('common.retry')}</button><button type="button" onClick={useOriginal} className="rounded border border-zinc-600 px-1 py-0.5 text-zinc-400">{t('common.useOriginal')}</button></>}
           </div>
         )}
         <DictationButton
           isListening={isListening}
           isAvailable={isAvailable}
-          title={dictationTitle(dictationMode, isListening)}
+          title={dictationTitle(dictationMode, isListening, t)}
           onClick={toggle}
         />
         <ImageRecognitionButton

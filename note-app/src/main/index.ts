@@ -1,18 +1,20 @@
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, BrowserWindowConstructorOptions, clipboard, ipcMain, session, shell, systemPreferences } from 'electron'
 import { join } from 'path'
+import { assistantDisplayName } from '@shared/constants'
 import icon from '../../resources/icon.png?asset'
 import { acknowledgeBlockInGoal, appendToBlock, applyBlockRouting, applyNewGoalRouting, createBlock, createGoal, deleteBlock, deleteBlockIfEmpty, deleteGoal, getAssistantConversations, getBlocks, getGoals, getSettings, readBlock, renameGoal, saveAssistantConversations, setCredential, setGoogleOAuthClientCredentials, setSettings, updateBlockCategories, writeBlock } from './lib'
 import { toggleMacDictation } from './dictation/macos'
 import { toggleWindowsDictation } from './dictation/windows'
 import { transcribeAudio } from './dictation/wisprflow'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OpenPluginsFolder, ParseDocument as ParseDocumentIpc, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument as SummarizeDocumentIpc, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGlossaryEntry, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGlossaryEntry, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGlossaryEntries, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OpenPluginsFolder, ParseDocument as ParseDocumentIpc, PolishTranscript, ReadBlock, RecognizeImage as RecognizeImageIpc, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument as SummarizeDocumentIpc, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, UpdateGlossaryEntry, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
 import { classifyBlock, listModels, polishTranscript, recognizeImage, runInlineAction, streamAssistant, summarizeBlockName, summarizeDocument, testConnection, testImageRecognitionConnection } from './llm/router'
 import { callPluginHost, ensurePluginsDirectory, initializePlugins, refreshPluginCatalog, removePlugin, runPluginCommand, setPluginConfig, setPluginEnabled } from './plugins'
 import { createGeneratedPlugin, interviewPluginWizard } from './plugins/wizard'
 import { parseDocumentLocally } from './documents'
 import { backfillCalendarFromVault, deleteCalendarItem, extractCalendarForBlock, getCalendarItems, resolveCalendarItem, updateCalendarItem, validateCalendarItem } from './calendar/service'
 import { connectGoogleCalendar, disconnectGoogleCalendar, syncGoogleCalendar } from './calendar/google'
+import { createGlossaryEntry, deleteGlossaryEntry, getGlossaryEntries, updateGlossaryEntry } from './glossary/store'
 
 const assistantStreams = new Map<string, AbortController>()
 
@@ -157,6 +159,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('connectGoogleCalendar', (_, ...args: Parameters<ConnectGoogleCalendar>) => connectGoogleCalendar(...args))
   ipcMain.handle('disconnectGoogleCalendar', (_, ...args: Parameters<DisconnectGoogleCalendar>) => disconnectGoogleCalendar(...args))
   ipcMain.handle('syncGoogleCalendar', (_, ...args: Parameters<SyncGoogleCalendar>) => syncGoogleCalendar(...args))
+  ipcMain.handle('getGlossaryEntries', (_, ...args: Parameters<GetGlossaryEntries>) => getGlossaryEntries(...args))
+  ipcMain.handle('createGlossaryEntry', (_, ...args: Parameters<CreateGlossaryEntry>) => createGlossaryEntry(...args))
+  ipcMain.handle('updateGlossaryEntry', (_, ...args: Parameters<UpdateGlossaryEntry>) => updateGlossaryEntry(...args))
+  ipcMain.handle('deleteGlossaryEntry', (_, ...args: Parameters<DeleteGlossaryEntry>) => deleteGlossaryEntry(...args))
   ipcMain.handle('getGoals', (_, ...args: Parameters<GetGoals>) => getGoals(...args))
   ipcMain.handle('createGoal', (_, ...args: Parameters<CreateGoal>) => createGoal(...args))
   ipcMain.handle('renameGoal', (_, ...args: Parameters<RenameGoal>) => renameGoal(...args))
@@ -216,12 +222,12 @@ app.whenReady().then(async () => {
     catch (error) { return { error: error instanceof Error ? error.message : 'Document summarization failed.' } }
   })
   ipcMain.handle('startAssistantStream', async (event, requestId: Parameters<StartAssistantStream>[0], message: Parameters<StartAssistantStream>[1], history: Parameters<StartAssistantStream>[2], scope: Parameters<StartAssistantStream>[3], selection: Parameters<StartAssistantStream>[4]) => {
-    if (assistantStreams.has(requestId)) return { ok: false, error: 'An assistant request with this id is already running.' }
+    if (assistantStreams.has(requestId)) return { ok: false, error: `A ${assistantDisplayName} request with this id is already running.` }
     const controller = new AbortController()
     assistantStreams.set(requestId, controller)
     void streamAssistant(message, history, scope, selection, { signal: controller.signal, onToken: (text) => event.sender.send('assistantStreamEvent', { requestId, type: 'token', text }) })
       .then(({ citedBlockIds, citedBlockCategoryIds, readGoalLabels }) => event.sender.send('assistantStreamEvent', { requestId, type: 'done', citedBlockIds, citedBlockCategoryIds, readGoalLabels }))
-      .catch((error) => { if (!controller.signal.aborted) event.sender.send('assistantStreamEvent', { requestId, type: 'error', message: error instanceof Error ? error.message : 'Assistant request failed.' }) })
+      .catch((error) => { if (!controller.signal.aborted) event.sender.send('assistantStreamEvent', { requestId, type: 'error', message: error instanceof Error ? error.message : `${assistantDisplayName} request failed.` }) })
       .finally(() => assistantStreams.delete(requestId))
     return { ok: true }
   })

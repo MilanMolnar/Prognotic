@@ -1,4 +1,5 @@
-import { useSettings } from '@renderer/context'
+import { useI18n, useSettings } from '@renderer/context'
+import type { Translate } from '@renderer/i18n'
 import { DictationMode } from '@shared/models'
 import { useMacDictation } from './useMacDictation'
 import { useWindowsDictation } from './useWindowsDictation'
@@ -23,15 +24,10 @@ export type UseDictationResult = {
     stop: () => void
 }
 
-const titles: Record<DictationMode, string> = {
-    windows: 'Open Windows voice typing (Win+H)',
-    macos: 'Open macOS Dictation (Fn-D)',
-    whisprflow: 'Wispr Flow dictation — click to start/stop'
-}
-
-export const dictationTitle = (mode: DictationMode, isListening: boolean): string => {
-    if (mode !== 'whisprflow') return titles[mode]
-    return isListening ? 'Stop dictation' : titles[mode]
+export const dictationTitle = (mode: DictationMode, isListening: boolean, t: Translate): string => {
+    if (mode === 'windows') return t('capture.windowsTitle')
+    if (mode === 'macos') return t('capture.macosTitle')
+    return isListening ? t('capture.stopDictation') : t('capture.wisprTitle')
 }
 
 // Routes dictation to the provider selected in Settings. All hooks are
@@ -41,6 +37,7 @@ export const useDictation = ({
     focusInput
 }: UseDictationParams): UseDictationResult => {
     const { settings } = useSettings()
+    const { t } = useI18n()
     const { dictationMode, hasWhisprflowApiKey } = settings
 
     const windows = useWindowsDictation({ focusInput })
@@ -56,7 +53,7 @@ export const useDictation = ({
             isListening: wisprFlow.isListening,
             interimText: '',
             error: wisprFlow.error,
-            notice: wisprFlow.isTranscribing ? 'Transcribing…' : null,
+            notice: wisprFlow.isTranscribing ? t('capture.transcribing') : null,
             isAvailable: true,
             toggle: wisprFlow.toggle,
             stop: wisprFlow.abort

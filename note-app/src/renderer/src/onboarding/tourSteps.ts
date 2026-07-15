@@ -1,3 +1,4 @@
+import { assistantDisplayName } from '@shared/constants'
 import type { LlmProvider } from '@shared/models'
 import { onboardingEvents } from './events'
 import { findTourSampleBlock, hasTourSampleBlock } from './tourLogic'
@@ -53,7 +54,9 @@ const sampleBlockDragTarget: TourTarget = (context) => {
     : 'block-drag-handle'
 }
 
-// Tour orchestration is intentionally data-only: add or reorder steps here,
+// Tour orchestration is intentionally data-only. Visible copy is resolved from
+// each stable step id in tourTranslations.ts so targeting and branching remain locale-neutral.
+// Add or reorder steps here,
 // and add a matching data-tour key only when the target is new. Engine changes
 // are unnecessary unless a new primitive (beyond targets, predicates, choices,
 // events, or lifecycle callbacks) is genuinely needed.
@@ -127,7 +130,7 @@ export const tourSteps: readonly TourStep[] = [
     id: 'settings-ai-choice',
     section: 'Settings',
     title: 'Set up AI now?',
-    body: 'AI adds goal routing, the assistant, image text recognition, document summaries, and the plugin wizard. You can configure it later.',
+    body: `AI powers goal routing, ${assistantDisplayName}, image text recognition, document summaries, and the plugin wizard. You can configure it later.`,
     placement: 'right',
     arrow: false,
     advance: 'next',
@@ -192,7 +195,7 @@ export const tourSteps: readonly TourStep[] = [
     id: 'ai-active-model',
     section: 'AI setup',
     title: 'Select the active model',
-    body: 'The active model is the global default for note routing, the assistant, inline actions, document summaries, and other optional AI workflows.',
+    body: `The active model is the global default for note routing, ${assistantDisplayName}, inline actions, document summaries, and other optional AI workflows.`,
     target: 'settings-active-model',
     placement: 'right',
     arrow: true,
@@ -238,7 +241,7 @@ export const tourSteps: readonly TourStep[] = [
     id: 'ai-mention',
     section: 'AI setup',
     title: 'AI stays optional',
-    body: 'Local capture, goals, plugins, and native dictation work without an AI connection. You can return to Settings whenever you want routing, summaries, image recognition, or assistant features.',
+    body: `Local capture, goals, plugins, and native dictation work without an AI connection. You can return to Settings whenever you want routing, summaries, image recognition, or ${assistantDisplayName}.`,
     placement: 'right',
     arrow: false,
     advance: 'next',
@@ -467,7 +470,7 @@ export const tourSteps: readonly TourStep[] = [
     id: 'block-drag-quick',
     section: 'Move and copy',
     title: 'Drag the block to Quick Note',
-    body: 'Hold the block’s drag handle, then drag and release it over Quick Note in the sidebar.',
+    body: 'Drag the block’s handle and release it over Quick Note in the sidebar.',
     target: sampleBlockDragTarget,
     placement: 'top',
     arrow: true,
@@ -504,9 +507,9 @@ export const tourSteps: readonly TourStep[] = [
   },
   {
     id: 'block-drag-assistant',
-    section: 'Assistant',
-    title: 'Add the block to assistant context',
-    body: 'Hold the drag handle again, then drop the block anywhere on the Assistant panel. Prognotic opens the panel automatically for this step.',
+    section: assistantDisplayName,
+    title: `Add the block to ${assistantDisplayName}'s context`,
+    body: `Drag the handle again, then drop the block anywhere on the ${assistantDisplayName} panel. Prognotic opens the panel automatically for this step.`,
     target: sampleBlockDragTarget,
     placement: 'top',
     arrow: true,
@@ -518,9 +521,9 @@ export const tourSteps: readonly TourStep[] = [
   },
   {
     id: 'assistant-overview',
-    section: 'Assistant',
-    title: 'Your note-aware assistant',
-    body: 'The dragged block now appears above the composer as explicit context. Goal and Time filter retrieved notes; Model chooses the conversation model; Mode switches between Note Chat, Research, and Search. Nothing is sent until you press Send, so this tour makes no AI request.',
+    section: assistantDisplayName,
+    title: `Meet ${assistantDisplayName}, your note-aware AI`,
+    body: `The dragged block now appears above ${assistantDisplayName}'s composer as explicit context. Goal and Time filter retrieved notes; Model chooses the conversation model; Mode switches between Note Chat, Research, and Search. Nothing is sent until you press Send, so this tour makes no AI request.`,
     target: 'chat-panel',
     placement: 'left',
     arrow: true,
@@ -533,7 +536,7 @@ export const tourSteps: readonly TourStep[] = [
     id: 'complete',
     section: 'Complete',
     title: 'You’re ready',
-    body: 'You have created a goal, reviewed capture tools, moved one note across goals, and attached it to assistant context. Welcome to Prognotic.',
+    body: `You have created a goal, reviewed capture tools, moved one note across goals, and attached it to ${assistantDisplayName}'s context. Welcome to Prognotic.`,
     placement: 'right',
     arrow: false,
     advance: 'next',

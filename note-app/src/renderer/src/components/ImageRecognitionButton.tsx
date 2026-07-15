@@ -1,4 +1,5 @@
 import { cn } from '@renderer/utils'
+import { useI18n } from '@renderer/context'
 import { JSX } from 'react'
 import { LuImage, LuLoaderCircle } from 'react-icons/lu'
 
@@ -15,13 +16,14 @@ export const ImageRecognitionButton = ({
     disabled = false,
     onClick
 }: ImageRecognitionButtonProps): JSX.Element | null => {
+    const { t } = useI18n()
     if (!isAvailable) return null
 
     return (
         <button
             data-tour="image-recognition"
             type="button"
-            title="Extract text from an image"
+            title={t('capture.extractImage')}
             aria-haspopup="dialog"
             disabled={disabled || isRecognizing}
             onClick={onClick}

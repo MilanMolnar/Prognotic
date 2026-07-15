@@ -22,6 +22,7 @@ import {
 } from './OnboardingContext'
 import { usePanelActions, usePanels } from './PanelsContext'
 import { useSettings, useSettingsActions } from './SettingsContext'
+import { useI18n } from './I18nContext'
 
 const defaultContinueDelay = 10_000
 
@@ -34,6 +35,7 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }):
   const { selectBlock } = useBlockActions()
   const { isLeftPanelOpen, isRightPanelOpen } = usePanels()
   const { toggleLeftPanel, toggleRightPanel } = usePanelActions()
+  const { t } = useI18n()
 
   const [phase, setPhase] = useState<OnboardingPhase>('loading')
   const [currentStepId, setCurrentStepId] = useState<string | null>(null)
@@ -149,10 +151,10 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }):
       })
       setPhase('hidden')
       setCurrentStepId(null)
-    } catch (error) {
-      setPersistenceError(error instanceof Error ? error.message : 'Could not save tour completion.')
+    } catch {
+      setPersistenceError(t('onboarding.completionError'))
     }
-  }, [updateSettings])
+  }, [t, updateSettings])
 
   const moveTo = useCallback((stepId: string): void => {
     leaveCurrentStep()
@@ -251,10 +253,10 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }):
       })
       setPhase('hidden')
       setCurrentStepId(null)
-    } catch (error) {
-      setPersistenceError(error instanceof Error ? error.message : 'Could not save the tour preference.')
+    } catch {
+      setPersistenceError(t('onboarding.persistenceError'))
     }
-  }, [updateSettings])
+  }, [t, updateSettings])
 
   const nextStep = useCallback((): void => moveForward(false), [moveForward])
   const continueAnyway = useCallback((): void => moveForward(true), [moveForward])

@@ -1,4 +1,5 @@
 import { JSX, useEffect, useId } from 'react'
+import { useI18n } from '@renderer/context'
 
 export type SettingInfoModalProps = {
   title: string
@@ -7,6 +8,7 @@ export type SettingInfoModalProps = {
 }
 
 export const SettingInfoModal = ({ title, body, onClose }: SettingInfoModalProps): JSX.Element => {
+  const { t } = useI18n()
   const titleId = useId()
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export const SettingInfoModal = ({ title, body, onClose }: SettingInfoModalProps
       <h2 id={titleId} className="font-bold text-zinc-100">{title}</h2>
       <p className="mt-3 text-sm leading-relaxed text-zinc-300">{body}</p>
       <div className="mt-4 flex justify-end">
-        <button type="button" onClick={onClose} className="rounded-md border border-zinc-500/50 px-2 py-1 text-sm text-zinc-200 hover:bg-zinc-700">Close</button>
+        <button type="button" onClick={onClose} className="rounded-md border border-zinc-500/50 px-2 py-1 text-sm text-zinc-200 hover:bg-zinc-700">{t('common.close')}</button>
       </div>
     </div>
   </div>

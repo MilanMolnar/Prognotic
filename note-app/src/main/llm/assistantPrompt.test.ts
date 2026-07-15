@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { assistantDisplayName } from '@shared/constants'
 import { AssistantMode } from '@shared/models'
 import { buildAssistantSystemPrompt } from './assistantPrompt'
 
@@ -16,6 +17,8 @@ describe('buildAssistantSystemPrompt', () => {
       )
 
       expect(prompt).toContain('Attached note blocks (explicit user context; available regardless of scope):')
+      expect(prompt).toContain(`You are ${assistantDisplayName}`)
+      expect(prompt).toContain('Treat attached note blocks as the primary context for this request')
       expect(prompt).toContain(fullAttachedContent)
       expect(prompt).toContain('[block:retrieved-id] Retrieved excerpt')
     }
@@ -25,5 +28,11 @@ describe('buildAssistantSystemPrompt', () => {
     const prompt = buildAssistantSystemPrompt('note-chat', 'All goals', '', '')
 
     expect(prompt).toContain('Attached note blocks (explicit user context; available regardless of scope):\n(none)')
+  })
+
+  it('instructs the assistant to reply in the selected UI language', () => {
+    const prompt = buildAssistantSystemPrompt('note-chat', 'All goals', '', '', '', 'Hungarian')
+
+    expect(prompt).toContain('Respond in Hungarian, unless the user explicitly requests another language.')
   })
 })

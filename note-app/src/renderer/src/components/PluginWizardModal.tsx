@@ -1,4 +1,4 @@
-import { usePluginActions } from '@renderer/context'
+import { useI18n, usePluginActions } from '@renderer/context'
 import { cn } from '@renderer/utils'
 import type {
   PluginWizardAnswer,
@@ -14,6 +14,7 @@ type ReadyPlan = Extract<PluginWizardInterviewResult, { status: 'ready_to_genera
 
 export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Element => {
   const { interviewPluginWizard, createGeneratedPlugin } = usePluginActions()
+  const { formatNumber, t } = useI18n()
   const [goal, setGoal] = useState('')
   const [answers, setAnswers] = useState<PluginWizardAnswer[]>([])
   const [question, setQuestion] = useState<string | null>(null)
@@ -91,7 +92,7 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
         return
       }
       if (!result.pluginId || !result.folderName) {
-        setError('The plugin was created but its identity was not returned.')
+        setError(t('plugin.wizard.error.identity'))
         return
       }
       setCreated({ pluginId: result.pluginId, folderName: result.folderName })
@@ -109,12 +110,12 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
   }
 
   const title = created
-    ? 'Plugin created'
+    ? t('plugin.wizard.title.created')
     : plan
-      ? 'Confirm plugin plan'
+      ? t('plugin.wizard.title.confirm')
       : question
-        ? 'Design your plugin'
-        : 'Create a plugin with AI'
+        ? t('plugin.wizard.title.design')
+        : t('plugin.wizard.title.create')
 
   return (
     <div
@@ -135,10 +136,10 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
           <div className="min-w-0 flex-1">
             <h2 id="plugin-wizard-title" className="font-semibold text-zinc-100">{title}</h2>
             <p className="mt-1 text-xs text-zinc-500">
-              The wizard stays within Prognotic plugin v1 and leaves the new plugin disabled for review.
+              {t('plugin.wizard.description')}
             </p>
           </div>
-          <button type="button" title="Close AI plugin wizard" disabled={busy} onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-40">
+          <button type="button" title={t('plugin.wizard.close')} disabled={busy} onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-40">
             <LuX className="h-5 w-5" />
           </button>
         </div>
@@ -146,7 +147,7 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {!question && !plan && !created && (
             <form onSubmit={beginInterview}>
-              <label htmlFor="plugin-wizard-goal" className="text-sm font-medium text-zinc-200">What should the plugin help you do?</label>
+              <label htmlFor="plugin-wizard-goal" className="text-sm font-medium text-zinc-200">{t('plugin.wizard.goalQuestion')}</label>
               <textarea
                 id="plugin-wizard-goal"
                 autoFocus
@@ -155,14 +156,14 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
                 onChange={(event) => setGoal(event.target.value)}
                 rows={6}
                 maxLength={4_000}
-                placeholder="Example: Track gym exercises, sets, reps, and weight; show recent sessions and let AI analyze one workout for progress patterns."
+                placeholder={t('plugin.wizard.goalPlaceholder')}
                 className="no-drag mt-2 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-200 outline-none caret-violet-400 placeholder:text-zinc-600 focus:border-violet-500/50"
               />
-              <p className="mt-2 text-xs text-zinc-600">The agent asks only about decisions that change the manifest or command code.</p>
+              <p className="mt-2 text-xs text-zinc-600">{t('plugin.wizard.scope')}</p>
               <div className="mt-4 flex justify-end">
                 <button type="submit" disabled={!goal.trim() || busy} className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/40 px-3 py-2 text-sm text-violet-300 hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-40">
                   <LuSparkles className={cn('h-4 w-4', busy && 'animate-pulse')} />
-                  {busy ? 'Planning...' : 'Start interview'}
+                  {busy ? t('plugin.wizard.planning') : t('plugin.wizard.start')}
                 </button>
               </div>
             </form>
@@ -172,7 +173,7 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
             <div>
               <div className="space-y-3">
                 <div className="rounded-md border border-white/10 bg-zinc-950/40 p-3 text-sm text-zinc-400">
-                  <span className="text-xs uppercase tracking-wide text-zinc-600">Your goal</span>
+                  <span className="text-xs uppercase tracking-wide text-zinc-600">{t('plugin.wizard.yourGoal')}</span>
                   <p className="mt-1 whitespace-pre-wrap">{goal}</p>
                 </div>
                 {answers.map((item, index) => (
@@ -198,9 +199,9 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
                   className="no-drag mt-2 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-200 outline-none caret-violet-400 focus:border-violet-500/50"
                 />
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="text-xs text-zinc-600">Question {answers.length + 1}; normally up to 8</span>
+                  <span className="text-xs text-zinc-600">{t('plugin.wizard.questionCount', { number: formatNumber(answers.length + 1) })}</span>
                   <button type="submit" disabled={!answerDraft.trim() || busy} className="rounded-md border border-violet-500/40 px-3 py-1.5 text-sm text-violet-300 hover:bg-violet-500/10 disabled:opacity-40">
-                    {busy ? 'Thinking...' : 'Continue'}
+                    {busy ? t('plugin.wizard.thinking') : t('plugin.wizard.continue')}
                   </button>
                 </div>
               </form>
@@ -209,7 +210,7 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
 
           {plan && !created && (
             <div>
-              <p className="text-sm text-zinc-300">Review the exact v1 plan before the wizard writes <code className="text-violet-300">plugin.json</code> and <code className="text-violet-300">index.cjs</code>.</p>
+              <p className="text-sm text-zinc-300">{t('plugin.wizard.reviewPlan')}</p>
               <ul className="mt-3 space-y-2">
                 {plan.summary.map((item) => (
                   <li key={item} className="flex gap-2 rounded-md border border-white/10 bg-zinc-950/30 p-2.5 text-sm text-zinc-300">
@@ -220,7 +221,7 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
               </ul>
               {plan.constraints.length > 0 && (
                 <div className="mt-3 rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-yellow-400/80">v1 reframing</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-yellow-400/80">{t('plugin.wizard.reframing')}</p>
                   {plan.constraints.map((constraint) => <p key={constraint} className="mt-1 text-xs text-yellow-100/70">{constraint}</p>)}
                 </div>
               )}
@@ -231,9 +232,9 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
             <div className="rounded-md border border-green-500/20 bg-green-500/5 p-4">
               <div className="flex items-center gap-2 text-green-300">
                 <LuCheck className="h-5 w-5" aria-hidden />
-                <p className="font-medium">Ready in the plugin manager</p>
+                <p className="font-medium">{t('plugin.wizard.ready')}</p>
               </div>
-              <p className="mt-2 text-sm text-zinc-300">Created <code>{created.folderName}</code> with id <code>{created.pluginId}</code>. It is disabled until you enable it in the manager.</p>
+              <p className="mt-2 text-sm text-zinc-300">{t('plugin.wizard.createdBody', { folder: created.folderName, id: created.pluginId })}</p>
             </div>
           )}
 
@@ -243,20 +244,20 @@ export const PluginWizardModal = ({ onClose }: PluginWizardModalProps): JSX.Elem
         {(plan || created) && (
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 p-4">
             {created ? (
-              <button type="button" onClick={onClose} className="rounded-md border border-green-500/40 px-3 py-1.5 text-sm text-green-300 hover:bg-green-500/10">Done</button>
+              <button type="button" onClick={onClose} className="rounded-md border border-green-500/40 px-3 py-1.5 text-sm text-green-300 hover:bg-green-500/10">{t('common.done')}</button>
             ) : (
               <>
                 <button type="button" disabled={busy} onClick={restartPlan} className="mr-auto inline-flex items-center gap-1 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 disabled:opacity-40">
-                  <LuArrowLeft className="h-4 w-4" /> Edit goal
+                  <LuArrowLeft className="h-4 w-4" /> {t('plugin.wizard.editGoal')}
                 </button>
                 {error && (
                   <button type="button" disabled={busy} onClick={() => { if (plan) void createPlugin(plan.spec, error) }} className="rounded-md border border-violet-500/40 px-3 py-1.5 text-sm text-violet-300 hover:bg-violet-500/10 disabled:opacity-40">
-                    {busy ? 'Revising...' : 'Revise with AI'}
+                    {busy ? t('plugin.wizard.revising') : t('plugin.wizard.reviseAi')}
                   </button>
                 )}
                 <button type="button" disabled={busy} onClick={() => { if (plan) void createPlugin(plan.spec) }} className="inline-flex items-center gap-1.5 rounded-md border border-yellow-500/50 px-3 py-1.5 text-sm text-yellow-300 hover:bg-yellow-500/10 disabled:opacity-40">
                   <LuSparkles className={cn('h-4 w-4', busy && 'animate-pulse')} />
-                  {busy ? 'Generating and validating...' : 'Confirm and create'}
+                  {busy ? t('plugin.wizard.generating') : t('plugin.wizard.confirmCreate')}
                 </button>
               </>
             )}

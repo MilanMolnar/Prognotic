@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OnAssistantStreamEvent, OpenPluginsFolder, ParseDocument, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGlossaryEntry, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGlossaryEntry, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGlossaryEntries, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OnAssistantStreamEvent, OpenPluginsFolder, ParseDocument, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, ToggleWindowsDictation, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, UpdateGlossaryEntry, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
 
 declare global {
   interface Window {
@@ -33,6 +33,10 @@ declare global {
       connectGoogleCalendar: ConnectGoogleCalendar
       disconnectGoogleCalendar: DisconnectGoogleCalendar
       syncGoogleCalendar: SyncGoogleCalendar
+      getGlossaryEntries: GetGlossaryEntries
+      createGlossaryEntry: CreateGlossaryEntry
+      updateGlossaryEntry: UpdateGlossaryEntry
+      deleteGlossaryEntry: DeleteGlossaryEntry
       getGoals: GetGoals
       createGoal: CreateGoal
       renameGoal: RenameGoal

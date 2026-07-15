@@ -1,4 +1,4 @@
-import { useBlockActions, useSettings } from '@renderer/context'
+import { useBlockActions, useI18n, useSettings } from '@renderer/context'
 import { dispatchOnboardingEvent, onboardingEvents } from '@renderer/onboarding/events'
 import { blockLabel } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
@@ -73,6 +73,7 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
   const menuRef = useRef<HTMLDivElement>(null)
   const { updateBlockCategories, classifyBlock } = useBlockActions()
   const { settings } = useSettings()
+  const { t } = useI18n()
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent): void => {
@@ -97,7 +98,7 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
   const handleAction = async (action: QuickAction): Promise<void> => {
     if (action.id === 'send-to-research') {
       if (block.categories.includes(researchCategory)) {
-        showBlockToast('Already in Research')
+        showBlockToast(t('block.alreadyResearch'))
         dispatchOnboardingEvent(onboardingEvents.blockSentToResearch, { blockId: block.id })
       } else {
         // Research joins the block's categories (multi-goal — the single
@@ -112,10 +113,10 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
             flyLabelToCategoryRow(blockLabel(block, settings.llm.aiBlockNameSummary), position, researchCategory)
             dispatchOnboardingEvent(onboardingEvents.blockSentToResearch, { blockId: block.id })
           } else {
-            showBlockToast('Could not send this note to Research.')
+            showBlockToast(t('block.error.sendResearch'))
           }
         } catch {
-          showBlockToast('Could not send this note to Research.')
+          showBlockToast(t('block.error.sendResearch'))
         }
       }
     } else {
@@ -145,11 +146,15 @@ export const BlockContextMenu = ({ block, position, onClose, onAiAction }: Block
           onClick={() => { void handleAction(action) }}
           className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 transition-colors duration-75 hover:bg-yellow-500/10 hover:text-yellow-500"
         >
-          {action.label}
+          {action.id === 'translate'
+            ? t('common.translate')
+            : action.id === 'explain'
+              ? t('common.explain')
+              : t('block.sendResearch')}
         </button>
       ))}
       {block.categories.includes(null) && (
-        <button type="button" onClick={() => { void classifyBlock(block.id); onClose() }} className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 transition-colors duration-75 hover:bg-yellow-500/10 hover:text-yellow-500">{block.routing ? 'Re-run AI routing' : 'Route with AI'}</button>
+        <button type="button" onClick={() => { void classifyBlock(block.id); onClose() }} className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 transition-colors duration-75 hover:bg-yellow-500/10 hover:text-yellow-500">{block.routing ? t('block.rerunRouting') : t('block.routeAi')}</button>
       )}
     </div>,
     document.body

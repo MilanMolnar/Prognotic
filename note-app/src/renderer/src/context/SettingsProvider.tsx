@@ -32,9 +32,6 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }): R
     }, [])
 
     const updateSettings = useCallback(async (patch: Partial<AppSettings>) => {
-        // Optimistic update; the main process clamps and returns the merged
-        // value, which reconciles the state.
-        setSettings((prev) => ({ ...prev, ...patch }))
         const merged = await window.context.setSettings(patch)
         setSettings(merged)
     }, [])

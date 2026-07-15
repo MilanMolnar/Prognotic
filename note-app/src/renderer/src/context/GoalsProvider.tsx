@@ -17,6 +17,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     const [selectedCategory, setSelectedCategory] = useState<CategoryKey>(null)
     const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null)
     const [isCalendarSelected, setIsCalendarSelected] = useState(false)
+    const [isGlossarySelected, setIsGlossarySelected] = useState(false)
     const { updateSettings } = useSettingsActions()
 
     useEffect(() => {
@@ -38,16 +39,25 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         setSelectedCategory(key)
         setSelectedPluginId(null)
         setIsCalendarSelected(false)
+        setIsGlossarySelected(false)
     }, [])
 
     const selectPlugin = useCallback((pluginId: string | null) => {
         setSelectedPluginId(pluginId)
         setIsCalendarSelected(false)
+        setIsGlossarySelected(false)
     }, [])
 
     const selectCalendar = useCallback(() => {
         setSelectedPluginId(null)
         setIsCalendarSelected(true)
+        setIsGlossarySelected(false)
+    }, [])
+
+    const selectGlossary = useCallback(() => {
+        setSelectedPluginId(null)
+        setIsCalendarSelected(false)
+        setIsGlossarySelected(true)
     }, [])
 
     const registerPersistedGoal = useCallback((goal: Goal) => {
@@ -66,6 +76,7 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
         setSelectedCategory(goal.id)
         setSelectedPluginId(null)
         setIsCalendarSelected(false)
+        setIsGlossarySelected(false)
     }, [registerPersistedGoal])
 
     const renameGoal = useCallback(async (id: string, name: string, description: string, routingHints = '') => {
@@ -87,13 +98,13 @@ export const GoalsProvider = ({ children }: { children: React.ReactNode }): Reac
     }, [updateSettings])
 
     const stateValue: GoalsState = useMemo(
-        () => ({ goals, selectedCategory, selectedPluginId, isCalendarSelected }),
-        [goals, selectedCategory, selectedPluginId, isCalendarSelected]
+        () => ({ goals, selectedCategory, selectedPluginId, isCalendarSelected, isGlossarySelected }),
+        [goals, selectedCategory, selectedPluginId, isCalendarSelected, isGlossarySelected]
     )
 
     const actionsValue: GoalsActions = useMemo(
-        () => ({ selectCategory, selectPlugin, selectCalendar, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
-        [selectCategory, selectPlugin, selectCalendar, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
+        () => ({ selectCategory, selectPlugin, selectCalendar, selectGlossary, createGoal, registerPersistedGoal, renameGoal, deleteGoal }),
+        [selectCategory, selectPlugin, selectCalendar, selectGlossary, createGoal, registerPersistedGoal, renameGoal, deleteGoal]
     )
 
     return (

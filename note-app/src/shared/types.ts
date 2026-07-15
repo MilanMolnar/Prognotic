@@ -1,4 +1,5 @@
-import { AppSettings, AssistantConversation, AssistantGoalMode, AssistantMode, BlockMeta, CalendarItem, Goal, LlmCredentialName, LlmProvider, NoteContent } from "./models";
+import { AppSettings, AssistantConversation, AssistantGoalMode, AssistantMode, BlockMeta, CalendarItem, GlossaryEntry, Goal, LlmCredentialName, LlmProvider, NoteContent } from "./models";
+import type { GlossaryValidationError } from './glossary'
 import { CreateGeneratedPluginInput, CreateGeneratedPluginResult, OpenPluginsFolderResult, PluginCatalog, PluginCommandInput, PluginCommandResult, PluginConfig, PluginHostCallResult, PluginHostRequest, PluginMutationResult, PluginWizardInterviewInput, PluginWizardInterviewResult } from './plugins'
 import type { DocumentFormat, DocumentSummaryOptions, SupportedDocumentExtension } from './documents'
 import type { SupportedImageMimeType } from './vision'
@@ -65,6 +66,14 @@ export type GoogleCalendarSyncResult = {
     conflicts: number
 }
 export type SyncGoogleCalendar = () => Promise<GoogleCalendarSyncResult>
+export type GlossaryErrorCode = GlossaryValidationError | 'duplicate-key' | 'not-found'
+export type GlossaryMutationResult =
+    | { entry: GlossaryEntry; error?: never }
+    | { error: GlossaryErrorCode; entry?: never }
+export type GetGlossaryEntries = () => Promise<GlossaryEntry[]>
+export type CreateGlossaryEntry = (key: string, explanation: string) => Promise<GlossaryMutationResult>
+export type UpdateGlossaryEntry = (id: GlossaryEntry['id'], key: string, explanation: string) => Promise<GlossaryMutationResult>
+export type DeleteGlossaryEntry = (id: GlossaryEntry['id']) => Promise<boolean>
 export type GetGoals = () => Promise<Goal[]>
 export type CreateGoal = (name: string, description: string, routingHints?: string) => Promise<Goal>
 export type RenameGoal = (id: Goal['id'], name: string, description: string, routingHints?: string) => Promise<Goal | null>
@@ -72,7 +81,17 @@ export type DeleteGoal = (id: Goal['id']) => Promise<boolean>
 // Wispr Flow: the renderer records and converts the take to 16 kHz PCM WAV;
 // main calls the Wispr Flow API with the key from settings.json — the key
 // never travels over this channel.
-export type TranscriptionResult = { text: string; error?: never } | { error: string; text?: never }
+export type TranscriptionErrorCode =
+    | 'invalid-audio'
+    | 'no-audio'
+    | 'too-long'
+    | 'key-required'
+    | 'key-rejected'
+    | 'failed'
+    | 'unreachable'
+export type TranscriptionResult =
+    | { text: string; error?: never; code?: never }
+    | { error: string; code?: TranscriptionErrorCode; text?: never }
 export type TranscribeAudio = (audio: ArrayBuffer) => Promise<TranscriptionResult>
 // Windows dictation: main sends Win+H to toggle system voice typing.
 export type ToggleWindowsDictation = () => Promise<{ ok: boolean; error?: string }>

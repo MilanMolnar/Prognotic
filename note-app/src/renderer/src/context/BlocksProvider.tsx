@@ -10,6 +10,7 @@ import {
 import { useGoalActions, useGoals } from './GoalsContext'
 import { useSettings } from './SettingsContext'
 import { useCalendarActions } from './CalendarContext'
+import { useI18n } from './I18nContext'
 
 const sortBlocks = (blocks: BlockMeta[]): BlockMeta[] =>
     [...blocks].sort((a, b) => b.createdAt - a.createdAt)
@@ -32,6 +33,7 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
     const { selectedCategory } = useGoals()
     const { registerPersistedGoal } = useGoalActions()
     const { extractBlockCalendar, refreshItems: refreshCalendarItems } = useCalendarActions()
+    const { t } = useI18n()
     const windowMs = settings.blockWindowMinutes * 60_000
 
     useEffect(() => {
@@ -157,16 +159,16 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
         try {
             const result = await window.context.classifyBlock(id)
             if (result.error) {
-                setRoutingErrors((previous) => ({ ...previous, [id]: result.error as string }))
+                setRoutingErrors((previous) => ({ ...previous, [id]: t('block.error.classify') }))
                 return
             }
             const updated = result.block
             if (!updated) return
             setBlocks((prev) => prev?.map((item) => item.id === updated.id ? updated : item))
-        } catch (error) {
+        } catch {
             setRoutingErrors((previous) => ({
                 ...previous,
-                [id]: error instanceof Error ? error.message : 'Could not classify this note.'
+                [id]: t('block.error.classify')
             }))
         } finally {
             setRoutingInProgressIds((previous) => {
@@ -175,7 +177,7 @@ export const BlocksProvider = ({ children }: { children: React.ReactNode }): Rea
                 return next
             })
         }
-    }, [])
+    }, [t])
 
     const nameFinalizedBlock = useCallback(async (id: string) => {
         try {

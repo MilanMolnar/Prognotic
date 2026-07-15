@@ -1,5 +1,5 @@
-import { usePluginActions, usePlugins } from '@renderer/context'
-import { cn, formatDateFromMs } from '@renderer/utils'
+import { useI18n, usePluginActions, usePlugins } from '@renderer/context'
+import { cn } from '@renderer/utils'
 import { isBlockUnvisitedInGoal } from '@shared/goalPresence'
 import {
   pluginEntryFor,
@@ -21,12 +21,6 @@ import { LuCheck, LuPencil, LuSparkles, LuTrash2, LuX } from 'react-icons/lu'
 
 export type PluginViewProps = ComponentProps<'div'> & { pluginId: string }
 
-const defaultStats: PluginStatDefinition[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'unvisited', label: 'Need review' },
-  { key: 'total', label: 'Total' }
-]
-
 const actionClasses = (action: PluginViewAction): string => cn(
   'inline-flex items-center gap-1 rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40',
   action.tone === 'ai'
@@ -39,10 +33,16 @@ const actionClasses = (action: PluginViewAction): string => cn(
 export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): JSX.Element => {
   const { plugins, blocksByPlugin, loadingPluginIds, error } = usePlugins()
   const { refreshPluginBlocks, runPluginCommand } = usePluginActions()
+  const { formatDateTime, formatNumber, t } = useI18n()
   const [captureText, setCaptureText] = useState('')
   const [editing, setEditing] = useState<{ blockId: string; content: string } | null>(null)
   const [runningKey, setRunningKey] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ message: string; tone: PluginNotificationTone } | null>(null)
+  const defaultStats: PluginStatDefinition[] = [
+    { key: 'today', label: t('plugin.stat.today') },
+    { key: 'unvisited', label: t('plugin.stat.review') },
+    { key: 'total', label: t('plugin.stat.total') }
+  ]
 
   const plugin = plugins?.find((candidate) => candidate.id === pluginId)
   const records = blocksByPlugin[pluginId]
@@ -69,7 +69,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
       }
       const notification = result.notifications?.at(-1)
       setNotice(notification ?? {
-        message: result.value?.message ?? 'Plugin action completed.',
+        message: result.value?.message ?? t('plugin.actionCompleted'),
         tone: 'success'
       })
       return true
@@ -91,7 +91,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
   }
 
   const deleteRecord = async (record: PluginBlockRecord, command: string): Promise<void> => {
-    if (!window.confirm('Delete this plugin note block?')) return
+    if (!window.confirm(t('plugin.deleteConfirm'))) return
     await run(command, { blockId: record.block.id }, `delete:${record.block.id}`)
   }
 
@@ -100,10 +100,10 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
   }
 
   if (!plugin || plugins === undefined) {
-    return <div className={cn('flex flex-1 items-center justify-center text-sm text-zinc-500', className)} {...props}>Loading plugin...</div>
+    return <div className={cn('flex flex-1 items-center justify-center text-sm text-zinc-500', className)} {...props}>{t('plugin.loading')}</div>
   }
   if (!plugin.enabled || !plugin.valid) {
-    return <div className={cn('flex flex-1 items-center justify-center text-sm text-red-400', className)} {...props}>{plugin.reason ?? 'This plugin is unavailable.'}</div>
+    return <div className={cn('flex flex-1 items-center justify-center text-sm text-red-400', className)} {...props}>{plugin.reason ?? t('plugin.unavailable')}</div>
   }
 
   const ui = plugin.ui
@@ -136,19 +136,19 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
     return (
       <article key={record.block.id} className={cn('rounded-lg border p-3', unvisited ? 'border-yellow-500/30 bg-yellow-500/[0.03]' : 'border-white/10')}>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
-          {showTimestamp && <span>{formatDateFromMs(record.block.createdAt)}</span>}
-          {showReviewBadge && unvisited && <span className="rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] font-medium text-yellow-400">Needs review</span>}
+          {showTimestamp && <span>{formatDateTime(record.block.createdAt, { dateStyle: 'short', timeStyle: 'short' })}</span>}
+          {showReviewBadge && unvisited && <span className="rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] font-medium text-yellow-400">{t('plugin.needsReview')}</span>}
           <span className="flex-1" />
-          {editor && !isEditing && <button type="button" title="Edit entry" onClick={() => setEditing({ blockId: record.block.id, content: record.content })} className="rounded p-1 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200"><LuPencil className="h-3.5 w-3.5" /></button>}
-          {deleteCommand && <button type="button" title="Delete entry" disabled={runningKey !== null} onClick={() => { void deleteRecord(record, deleteCommand) }} className="rounded p-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"><LuTrash2 className="h-3.5 w-3.5" /></button>}
+          {editor && !isEditing && <button type="button" title={t('plugin.editEntry')} onClick={() => setEditing({ blockId: record.block.id, content: record.content })} className="rounded p-1 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200"><LuPencil className="h-3.5 w-3.5" /></button>}
+          {deleteCommand && <button type="button" title={t('plugin.deleteEntry')} disabled={runningKey !== null} onClick={() => { void deleteRecord(record, deleteCommand) }} className="rounded p-1 text-zinc-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"><LuTrash2 className="h-3.5 w-3.5" /></button>}
         </div>
 
         {isEditing && editor ? (
           <div className="mt-2">
             <textarea value={editing.content} onChange={(event) => setEditing({ ...editing, content: event.target.value })} rows={8} className="no-drag w-full resize-y rounded-md border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-200 outline-none caret-yellow-500 focus:border-yellow-500/50" />
             <div className="mt-2 flex justify-end gap-2">
-              <button type="button" onClick={() => setEditing(null)} className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"><LuX className="h-3.5 w-3.5" /> Cancel</button>
-              <button type="button" disabled={!editing.content.trim() || runningKey !== null} onClick={() => { void saveEdit(editor.command) }} className="inline-flex items-center gap-1 rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-40"><LuCheck className="h-3.5 w-3.5" /> Save</button>
+              <button type="button" onClick={() => setEditing(null)} className="inline-flex items-center gap-1 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"><LuX className="h-3.5 w-3.5" /> {t('common.cancel')}</button>
+              <button type="button" disabled={!editing.content.trim() || runningKey !== null} onClick={() => { void saveEdit(editor.command) }} className="inline-flex items-center gap-1 rounded border border-yellow-500/40 px-2 py-1 text-xs text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-40"><LuCheck className="h-3.5 w-3.5" /> {t('common.save')}</button>
             </div>
           </div>
         ) : (
@@ -170,7 +170,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
                   className={actionClasses(action)}
                 >
                   {action.tone === 'ai' && <LuSparkles className="h-3.5 w-3.5" />}
-                  {runningKey === `${action.command}:${record.block.id}` ? 'Working...' : action.label}
+                  {runningKey === `${action.command}:${record.block.id}` ? t('plugin.working') : action.label}
                 </button>
               ))}
           </div>
@@ -197,7 +197,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
           map.set(key, group)
           return map
         }, new Map<string, PluginBlockRecord[]>())].map(([key, groupRecords]) => ({
-          label: new Date(groupRecords[0].block.createdAt).toLocaleDateString(undefined, {
+          label: formatDateTime(groupRecords[0].block.createdAt, {
             weekday: 'short',
             month: 'short',
             day: 'numeric',
@@ -207,8 +207,8 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
           key
         }))
       : [
-          { label: element?.labels?.today ?? 'Today', records: records.filter((record) => record.block.createdAt >= todayStartMs), key: 'today' },
-          { label: element?.labels?.recent ?? 'Recent', records: records.filter((record) => record.block.createdAt < todayStartMs), key: 'recent' }
+          { label: element?.labels?.today ?? t('common.today'), records: records.filter((record) => record.block.createdAt >= todayStartMs), key: 'today' },
+          { label: element?.labels?.recent ?? t('plugin.recent'), records: records.filter((record) => record.block.createdAt < todayStartMs), key: 'recent' }
         ].filter((group) => group.records.length > 0)
 
     return (
@@ -236,7 +236,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
               <h1 className="text-lg font-semibold text-zinc-100">{config?.title ?? plugin.sidebar?.label ?? plugin.name}</h1>
               <p className="mt-0.5 text-sm text-zinc-500">{config?.description ?? plugin.description}</p>
             </div>
-            {config?.showReviewCount !== false && plugin.badgeCount > 0 && <span className="shrink-0 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-400">{plugin.badgeCount} need review</span>}
+            {config?.showReviewCount !== false && plugin.badgeCount > 0 && <span className="shrink-0 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-400">{t('plugin.reviewCount', { count: formatNumber(plugin.badgeCount) })}</span>}
           </div>
         </section>
       )
@@ -254,7 +254,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
             rows={2}
             className="no-drag min-h-16 min-w-0 flex-1 resize-y rounded-md border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-200 outline-none caret-yellow-500 placeholder:text-zinc-600 focus:border-yellow-500/50"
           />
-          <button type="submit" disabled={!captureText.trim() || runningKey !== null} className="self-end rounded-md border border-yellow-500/40 px-3 py-2 text-sm text-yellow-400 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-40">{runningKey === 'capture' ? 'Adding...' : config.label}</button>
+          <button type="submit" disabled={!captureText.trim() || runningKey !== null} className="self-end rounded-md border border-yellow-500/40 px-3 py-2 text-sm text-yellow-400 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-40">{runningKey === 'capture' ? t('plugin.adding') : config.label}</button>
         </form>
       )
     }
@@ -265,7 +265,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
         : ui?.stats ?? defaultStats
       return (
         <div key={key} className="flex flex-wrap gap-2">
-          {items.map((item) => <span key={item.key} className="rounded-full border border-white/10 bg-zinc-900 px-2 py-1 text-xs text-zinc-400"><strong className="font-medium text-zinc-200">{statValue(item.key)}</strong> {item.label}</span>)}
+          {items.map((item) => <span key={item.key} className="rounded-full border border-white/10 bg-zinc-900 px-2 py-1 text-xs text-zinc-400"><strong className="font-medium text-zinc-200">{formatNumber(statValue(item.key))}</strong> {item.label}</span>)}
         </div>
       )
     }
@@ -283,7 +283,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
         ? element.message
         : undefined
       if (isLoading || records === undefined || records.length > 0) return null
-      return <p key={key} className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">{message ?? ui?.emptyState ?? 'No plugin notes yet.'}</p>
+      return <p key={key} className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">{message ?? ui?.emptyState ?? t('plugin.empty')}</p>
     }
     if (typeof element === 'object' && element.type === 'section-label') {
       return <div key={key}>{renderSectionLabel(element.label)}</div>
@@ -295,7 +295,7 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
         <div key={key}>
           <button type="button" disabled={runningKey !== null} onClick={() => { void run(action.command, {}, `global:${action.command}`) }} className={actionClasses(action)}>
             {action.tone === 'ai' && <LuSparkles className="h-3.5 w-3.5" />}
-            {runningKey === `global:${action.command}` ? 'Working...' : action.label}
+            {runningKey === `global:${action.command}` ? t('plugin.working') : action.label}
           </button>
         </div>
       )
@@ -307,8 +307,8 @@ export const PluginView = ({ pluginId, className, ...props }: PluginViewProps): 
     <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-2', className)} {...props}>
       {(notice || error) && <p className={cn('mb-2 text-xs', (notice?.tone === 'error' || (!notice && error)) ? 'text-red-400' : notice?.tone === 'success' ? 'text-green-400' : 'text-zinc-400')} role={notice?.tone === 'error' || (!notice && error) ? 'alert' : 'status'}>{notice?.message ?? error}</p>}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-3">
-        {!ui && <div className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">This plugin has no host-rendered primary view.</div>}
-        {isLoading && records === undefined && <p className="text-sm text-zinc-500">Loading entries...</p>}
+        {!ui && <div className="rounded border border-dashed border-zinc-700 p-4 text-sm text-zinc-500">{t('plugin.noView')}</div>}
+        {isLoading && records === undefined && <p className="text-sm text-zinc-500">{t('plugin.loadingEntries')}</p>}
         {ui && pluginUiLayout(ui).map(renderLayoutElement)}
       </div>
     </div>

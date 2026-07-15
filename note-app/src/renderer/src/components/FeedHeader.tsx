@@ -1,4 +1,4 @@
-import { useBlocks, useGoals, useSearch, useSearchActions, useSettings } from '@renderer/context'
+import { useBlocks, useGoals, useI18n, useSearch, useSearchActions, useSettings } from '@renderer/context'
 import { blockLabel, cn } from '@renderer/utils'
 import { researchCategory } from '@shared/constants'
 import { ComponentProps, JSX, KeyboardEvent } from 'react'
@@ -14,14 +14,15 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
   const { isSearchOpen, query } = useSearch()
   const { openSearch, closeSearch, setQuery } = useSearchActions()
   const { settings } = useSettings()
+  const { t } = useI18n()
 
   const isEditView = selectedBlockId !== null
   const categoryLabel =
     selectedCategory === null
-      ? 'Quick Note'
+      ? t('navigation.quickNotes')
       : selectedCategory === researchCategory
-        ? 'Research'
-        : (goals?.find((goal) => goal.id === selectedCategory)?.name ?? 'Goal')
+        ? t('navigation.research')
+        : (goals?.find((goal) => goal.id === selectedCategory)?.name ?? t('navigation.goals'))
   const label = isEditView
     ? selectedBlock
       ? blockLabel(selectedBlock, settings.llm.aiBlockNameSummary)
@@ -36,7 +37,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
     <div className={cn('relative no-drag', className)} {...props}>
       <button
         onClick={isSearchOpen ? closeSearch : openSearch}
-        title={isSearchOpen ? 'Close search' : isEditView ? 'Find in block' : 'Search blocks'}
+        title={isSearchOpen ? t('search.close') : isEditView ? t('search.inBlock') : t('search.blocks')}
         className="group flex cursor-pointer items-center gap-1.5 text-sm"
       >
         <span
@@ -64,7 +65,7 @@ export const FeedHeader = ({ className, ...props }: ComponentProps<'div'>): JSX.
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleInputKeyDown}
-          placeholder={`Quick search in ${label}`}
+          placeholder={t('search.placeholder', { label })}
           className="no-drag absolute left-1/2 top-full z-30 mt-1 w-72 max-w-[min(18rem,calc(100vw-6rem))] -translate-x-1/2 animate-[search-roll_150ms_ease-out] rounded-md border border-zinc-400/50 bg-zinc-900/95 px-2 py-1 text-sm outline-none caret-yellow-500 placeholder:text-zinc-500 focus:border-zinc-300/50"
         />
       )}

@@ -83,6 +83,16 @@
   }
 }
 
+@keyframes startup-loading {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(414%);
+  }
+}
+
 /* In-editor matches when searching inside an open block (CSS Custom
    Highlight API — no DOM mutation, safe with the Lexical editor). */
 ::highlight(block-search) {

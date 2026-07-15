@@ -1,4 +1,5 @@
 import { cn } from '@renderer/utils'
+import { useI18n } from '@renderer/context'
 import { JSX } from 'react'
 import { LuFileUp, LuLoaderCircle } from 'react-icons/lu'
 
@@ -12,11 +13,13 @@ export const DocumentCaptureButton = ({
     isProcessing,
     disabled = false,
     onClick
-}: DocumentCaptureButtonProps): JSX.Element => (
+}: DocumentCaptureButtonProps): JSX.Element => {
+    const { t } = useI18n()
+    return (
     <button
         data-tour="document-capture"
         type="button"
-        title="Insert text from a document"
+        title={t('capture.insertDocument')}
         aria-haspopup="dialog"
         disabled={disabled || isProcessing}
         onClick={onClick}
@@ -29,4 +32,5 @@ export const DocumentCaptureButton = ({
             ? <LuLoaderCircle className="h-4 w-4 animate-spin" />
             : <LuFileUp className="h-4 w-4" />}
     </button>
-)
+    )
+}

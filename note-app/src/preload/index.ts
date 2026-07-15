@@ -1,4 +1,4 @@
-import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OnAssistantStreamEvent, OpenPluginsFolder, ParseDocument, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
+import { AcknowledgeBlockInGoal, AppendToBlock, ApplyBlockRouting, ApplyNewGoalRouting, BackfillCalendar, CallPluginHost, CancelAssistantStream, ClassifyBlock, ClearCredential, ConfigureGoogleCalendar, ConnectGoogleCalendar, CreateBlock, CreateGeneratedPlugin, CreateGlossaryEntry, CreateGoal, DeleteBlock, DeleteBlockIfEmpty, DeleteCalendarItem, DeleteGlossaryEntry, DeleteGoal, DisconnectGoogleCalendar, ExtractCalendarForBlock, GetAssistantConversations, GetBlocks, GetCalendarItems, GetGlossaryEntries, GetGoals, GetLlmModels, GetPlugins, GetSettings, InterviewPluginWizard, OnAssistantStreamEvent, OpenPluginsFolder, ParseDocument, PolishTranscript, ReadBlock, RecognizeImage, RemovePlugin, RenameGoal, ResolveCalendarItem, RunInlineAction, RunPluginCommand, SaveAssistantConversations, SetCredential, SetPluginConfig, SetPluginEnabled, SetSettings, StartAssistantStream, SummarizeBlockName, SummarizeDocument, SyncGoogleCalendar, TestImageRecognitionConnection, TestLlmConnection, ToggleMacDictation, TranscribeAudio, UpdateBlockCategories, UpdateCalendarItem, UpdateGlossaryEntry, ValidateCalendarItem, WriteBlock, WriteClipboardText } from '@shared/types'
 import { contextBridge, ipcRenderer } from 'electron'
 
 
@@ -10,6 +10,7 @@ try {
   // Expose protected methods that allow the renderer process to use
   // the ipcRenderer without exposing the entire object
   contextBridge.exposeInMainWorld('context', {
+    // OS locale only; renderer UI copy and formatting follow settings.uiLocale.
     locale: navigator.language,
     platform: process.platform,
 
@@ -59,6 +60,10 @@ try {
     connectGoogleCalendar: (...args: Parameters<ConnectGoogleCalendar>) => ipcRenderer.invoke('connectGoogleCalendar', ...args),
     disconnectGoogleCalendar: (...args: Parameters<DisconnectGoogleCalendar>) => ipcRenderer.invoke('disconnectGoogleCalendar', ...args),
     syncGoogleCalendar: (...args: Parameters<SyncGoogleCalendar>) => ipcRenderer.invoke('syncGoogleCalendar', ...args),
+    getGlossaryEntries: (...args: Parameters<GetGlossaryEntries>) => ipcRenderer.invoke('getGlossaryEntries', ...args),
+    createGlossaryEntry: (...args: Parameters<CreateGlossaryEntry>) => ipcRenderer.invoke('createGlossaryEntry', ...args),
+    updateGlossaryEntry: (...args: Parameters<UpdateGlossaryEntry>) => ipcRenderer.invoke('updateGlossaryEntry', ...args),
+    deleteGlossaryEntry: (...args: Parameters<DeleteGlossaryEntry>) => ipcRenderer.invoke('deleteGlossaryEntry', ...args),
     getGoals: (...args: Parameters<GetGoals>) => {
       return ipcRenderer.invoke('getGoals', ...args)
     },

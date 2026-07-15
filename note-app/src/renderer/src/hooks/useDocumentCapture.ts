@@ -5,6 +5,7 @@ import type {
     ParsedDocument,
     SummarizeDocumentInput
 } from '@shared/types'
+import { useI18n } from '@renderer/context/I18nContext'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type UseDocumentCaptureParams = {
@@ -34,6 +35,7 @@ export type UseDocumentCaptureResult = {
 }
 
 export const useDocumentCapture = ({ onInsert }: UseDocumentCaptureParams): UseDocumentCaptureResult => {
+    const { t } = useI18n()
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [isParsing, setIsParsing] = useState(false)
     const [isSummarizing, setIsSummarizing] = useState(false)
@@ -92,18 +94,18 @@ export const useDocumentCapture = ({ onInsert }: UseDocumentCaptureParams): UseD
             const result = await window.context.parseDocument(input)
             if (attempt !== parseAttemptRef.current) return
             if ('error' in result) {
-                setParseError(result.error ?? 'Document parsing failed.')
+                setParseError(t('document.error.parse'))
                 return
             }
             setParsedDocument(result)
-        } catch (error) {
+        } catch {
             if (attempt === parseAttemptRef.current) {
-                setParseError(error instanceof Error ? error.message : 'Document parsing failed.')
+                setParseError(t('document.error.parse'))
             }
         } finally {
             if (attempt === parseAttemptRef.current) setIsParsing(false)
         }
-    }, [clearSummary])
+    }, [clearSummary, t])
 
     const runSummary = useCallback(async (
         input: SummarizeDocumentInput,
@@ -119,19 +121,19 @@ export const useDocumentCapture = ({ onInsert }: UseDocumentCaptureParams): UseD
             const result = await window.context.summarizeDocument(input)
             if (attempt !== summaryAttemptRef.current) return
             if ('error' in result) {
-                setSummaryError(result.error ?? 'Document summarization failed.')
+                setSummaryError(t('document.error.summary'))
                 return
             }
             setSummaryText(result.text)
             setSummaryInputTruncated(result.inputTruncated)
-        } catch (error) {
+        } catch {
             if (attempt === summaryAttemptRef.current) {
-                setSummaryError(error instanceof Error ? error.message : 'Document summarization failed.')
+                setSummaryError(t('document.error.summary'))
             }
         } finally {
             if (attempt === summaryAttemptRef.current) setIsSummarizing(false)
         }
-    }, [])
+    }, [t])
 
     const openModal = useCallback((): void => {
         resetDocument()
@@ -158,12 +160,12 @@ export const useDocumentCapture = ({ onInsert }: UseDocumentCaptureParams): UseD
                     mimeType: selection.file.type
                 }, attempt)
             })
-            .catch((error) => {
+            .catch(() => {
                 if (attempt !== parseAttemptRef.current) return
-                setParseError(error instanceof Error ? error.message : 'Could not read the selected document.')
+                setParseError(t('document.error.read'))
                 setIsParsing(false)
             })
-    }, [runParse])
+    }, [runParse, t])
 
     const retryParse = useCallback((): void => {
         const input = pendingParseRef.current

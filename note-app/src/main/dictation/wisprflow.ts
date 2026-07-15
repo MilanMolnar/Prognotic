@@ -1,6 +1,5 @@
 import { TranscribeAudio } from '@shared/types'
-import { app } from 'electron'
-import { getCredential } from '../lib'
+import { getCredential, getSettings } from '../lib'
 
 // Wispr Flow developer API (platform.wisprflow.ai) — Wispr's dictation
 // service, not to be confused with OpenAI's Whisper model. It accepts a
@@ -14,23 +13,23 @@ const maxAudioBytes = 25 * 1024 * 1024
 // never sends (or needs) it.
 export const transcribeAudio: TranscribeAudio = async (audio) => {
     if (!(audio instanceof ArrayBuffer)) {
-        return { error: 'Invalid audio payload.' }
+        return { error: 'Invalid audio payload.', code: 'invalid-audio' }
     }
     if (audio.byteLength === 0) {
-        return { error: 'No audio was recorded.' }
+        return { error: 'No audio was recorded.', code: 'no-audio' }
     }
     if (audio.byteLength > maxAudioBytes) {
-        return { error: 'Recording is too long — Wispr Flow accepts up to 6 minutes.' }
+        return { error: 'Recording is too long — Wispr Flow accepts up to 6 minutes.', code: 'too-long' }
     }
 
     const apiKey = (await getCredential('whisprflow')).trim()
     if (!apiKey) {
-        return { error: 'Add your Wispr Flow API key in Settings to use Wispr Flow dictation.' }
+        return { error: 'Add your Wispr Flow API key in Settings to use Wispr Flow dictation.', code: 'key-required' }
     }
 
-    // Two-letter ISO 639-1 code; steering recognition to the OS language
-    // beats Wispr Flow's autodetection on short clips.
-    const language = app.getLocale().slice(0, 2).toLowerCase()
+    // The persisted UI locale is already a two-letter ISO 639-1 code. It
+    // keeps recognition aligned with the language the user selected in-app.
+    const language = (await getSettings()).uiLocale
 
     try {
         const response = await fetch(wisprFlowEndpoint, {
@@ -48,22 +47,23 @@ export const transcribeAudio: TranscribeAudio = async (audio) => {
 
         if (!response.ok) {
             if (response.status === 401) {
-                return { error: 'Wispr Flow rejected the API key — check it in Settings.' }
+                return { error: 'Wispr Flow rejected the API key — check it in Settings.', code: 'key-rejected' }
             }
             if (response.status === 413) {
-                return { error: 'Recording is too long — Wispr Flow accepts up to 6 minutes.' }
+                return { error: 'Recording is too long — Wispr Flow accepts up to 6 minutes.', code: 'too-long' }
             }
             const body = (await response.json().catch(() => null)) as { detail?: string } | null
             return {
                 error: body?.detail
                     ? `Transcription failed: ${body.detail}`
-                    : `Transcription failed (HTTP ${response.status}).`
+                    : `Transcription failed (HTTP ${response.status}).`,
+                code: 'failed'
             }
         }
 
         const payload = (await response.json()) as { text?: string }
         return { text: typeof payload.text === 'string' ? payload.text : '' }
     } catch {
-        return { error: 'Could not reach Wispr Flow — check your internet connection.' }
+        return { error: 'Could not reach Wispr Flow — check your internet connection.', code: 'unreachable' }
     }
 }

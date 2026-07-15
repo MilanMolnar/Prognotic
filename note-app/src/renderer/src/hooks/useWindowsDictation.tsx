@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useI18n } from '@renderer/context'
 
 export type UseWindowsDictationParams = {
     focusInput?: () => void
@@ -21,6 +22,7 @@ const noticeDurationMs = 3500
 export const useWindowsDictation = ({
     focusInput
 }: UseWindowsDictationParams): UseWindowsDictationResult => {
+    const { t } = useI18n()
     const isAvailable = window.context.platform === 'win32'
 
     const [error, setError] = useState<string | null>(null)
@@ -50,7 +52,7 @@ export const useWindowsDictation = ({
 
     const open = useCallback((): void => {
         if (!isAvailable) {
-            setError('Windows dictation is only available on Windows.')
+            setError(t('capture.windowsOnly'))
             return
         }
         setError(null)
@@ -59,12 +61,12 @@ export const useWindowsDictation = ({
             await new Promise((resolve) => setTimeout(resolve, focusDelayMs))
             const result = await window.context.toggleWindowsDictation()
             if (!result.ok) {
-                setError(result.error ?? 'Windows dictation failed.')
+                setError(t('capture.windowsFailed'))
                 return
             }
-            showNotice('Listening...')
+            showNotice(t('capture.listening'))
         })()
-    }, [isAvailable, focusInput, showNotice])
+    }, [isAvailable, focusInput, showNotice, t])
 
     // No-op: we cannot detect when the user closes the Windows bar.
     const stop = useCallback((): void => undefined, [])

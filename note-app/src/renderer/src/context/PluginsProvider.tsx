@@ -1,6 +1,7 @@
 import type { InstalledPlugin, PluginBlockRecord, PluginCatalog, PluginCommandInput, PluginCommandResult, PluginConfig, PluginWizardInterviewInput, PluginWizardInterviewResult, PluginWizardSpec } from '@shared/plugins'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGoalActions, useGoals } from './GoalsContext'
+import { useI18n } from './I18nContext'
 import {
     PluginsActions,
     PluginsActionsContext,
@@ -16,6 +17,7 @@ const isPluginBlockRecord = (value: unknown): value is PluginBlockRecord => {
 }
 
 export const PluginsProvider = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
+    const { t } = useI18n()
     const [plugins, setPlugins] = useState<PluginCatalog['plugins'] | undefined>(undefined)
     const [pluginsPath, setPluginsPath] = useState('')
     const [blocksByPlugin, setBlocksByPlugin] = useState<Record<string, PluginBlockRecord[]>>({})
@@ -51,9 +53,9 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             applyCatalog(await window.context.getPlugins())
             setError(null)
         } catch (refreshError) {
-            setError(refreshError instanceof Error ? refreshError.message : 'Could not load plugins.')
+            setError(refreshError instanceof Error ? refreshError.message : t('plugin.error.load'))
         }
-    }, [applyCatalog])
+    }, [applyCatalog, t])
 
     useEffect(() => {
         void refreshPlugins()
@@ -76,11 +78,11 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             setError(result.error ?? null)
             return result.error ?? null
         } catch (mutationError) {
-            const message = mutationError instanceof Error ? mutationError.message : 'Could not update this plugin.'
+            const message = mutationError instanceof Error ? mutationError.message : t('plugin.error.update')
             setError(message)
             return message
         }
-    }, [applyCatalog, selectPlugin])
+    }, [applyCatalog, selectPlugin, t])
 
     const setPluginConfig = useCallback(async (
         pluginId: string,
@@ -92,11 +94,11 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             setError(result.error ?? null)
             return result.error ?? null
         } catch (mutationError) {
-            const message = mutationError instanceof Error ? mutationError.message : 'Could not save plugin configuration.'
+            const message = mutationError instanceof Error ? mutationError.message : t('plugin.error.saveConfig')
             setError(message)
             return message
         }
-    }, [applyCatalog])
+    }, [applyCatalog, t])
 
     const removePlugin = useCallback(async (folderName: string): Promise<string | null> => {
         const pluginId = pluginsRef.current?.find((plugin) => plugin.folderName === folderName)?.id
@@ -107,11 +109,11 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             setError(result.error ?? null)
             return result.error ?? null
         } catch (mutationError) {
-            const message = mutationError instanceof Error ? mutationError.message : 'Could not remove this plugin.'
+            const message = mutationError instanceof Error ? mutationError.message : t('plugin.error.remove')
             setError(message)
             return message
         }
-    }, [applyCatalog, selectPlugin])
+    }, [applyCatalog, selectPlugin, t])
 
     const openPluginsFolder = useCallback(async (): Promise<string | null> => {
         try {
@@ -120,11 +122,11 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             setError(result.error)
             return result.error
         } catch (openError) {
-            const message = openError instanceof Error ? openError.message : 'Could not open the plugins folder.'
+            const message = openError instanceof Error ? openError.message : t('plugin.error.openFolder')
             setError(message)
             return message
         }
-    }, [])
+    }, [t])
 
     const refreshPluginBlocks = useCallback(async (pluginId: string): Promise<void> => {
         setLoadingPluginIds((previous) => new Set(previous).add(pluginId))
@@ -139,7 +141,7 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             }
             const records = result.value
             if (!Array.isArray(records) || !records.every(isPluginBlockRecord)) {
-                setError('The plugin returned an invalid block list.')
+                setError(t('plugin.error.invalidBlocks'))
                 return
             }
             setBlocksByPlugin((previous) => ({
@@ -148,7 +150,7 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             }))
             setError(null)
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Could not load plugin notes.')
+            setError(loadError instanceof Error ? loadError.message : t('plugin.error.loadNotes'))
         } finally {
             setLoadingPluginIds((previous) => {
                 const next = new Set(previous)
@@ -156,7 +158,7 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
                 return next
             })
         }
-    }, [])
+    }, [t])
 
     const runPluginCommand = useCallback(async (
         pluginId: string,
@@ -169,7 +171,7 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
         } catch (commandError) {
             result = {
                 ok: false,
-                error: commandError instanceof Error ? commandError.message : 'Plugin action failed.'
+                error: commandError instanceof Error ? commandError.message : t('plugin.error.action')
             }
         }
         if (result.ok) {
@@ -178,7 +180,7 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
             setError(result.error)
         }
         return result
-    }, [refreshPluginBlocks, refreshPlugins])
+    }, [refreshPluginBlocks, refreshPlugins, t])
 
     const interviewPluginWizard = useCallback(async (
         input: PluginWizardInterviewInput
@@ -190,11 +192,11 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
         } catch (interviewError) {
             const message = interviewError instanceof Error
                 ? interviewError.message
-                : 'The AI plugin interview failed.'
+                : t('plugin.error.interview')
             setError(message)
             return { status: 'error', error: message }
         }
-    }, [])
+    }, [t])
 
     const createGeneratedPlugin = useCallback(async (
         spec: PluginWizardSpec,
@@ -216,11 +218,11 @@ export const PluginsProvider = ({ children }: { children: React.ReactNode }): Re
         } catch (creationError) {
             const message = creationError instanceof Error
                 ? creationError.message
-                : 'The generated plugin could not be installed.'
+                : t('plugin.error.installGenerated')
             setError(message)
             return { error: message }
         }
-    }, [applyCatalog])
+    }, [applyCatalog, t])
 
     const stateValue: PluginsState = useMemo(() => ({
         plugins,
